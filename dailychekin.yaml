@@ -1,0 +1,53 @@
+Diagram:
+  DefinitionFiles:
+  - Type: URL
+    Url: https://raw.githubusercontent.com/awslabs/diagram-as-code/main/definitions/definition-for-aws-icons-light.yaml
+  Resources:
+    Canvas:
+      Type: AWS::Diagram::Canvas
+      Children:
+        - User
+        - AWSCloud
+    User: 
+      Type: AWS::Diagram::Resource
+      Preset: User
+    AWSCloud:
+      Type: AWS::Diagram::Cloud
+      Children:
+        - CloudFront
+        - S3Bucket
+        - Lambda
+        - DynamoDB
+    CloudFront:
+      Type: AWS::CloudFront::Distribution
+    S3Bucket:
+      Type: AWS::S3::Bucket
+    Lambda:
+      Type: AWS::Lambda::Function
+    DynamoDB:
+      Type: AWS::DynamoDB::Table
+  Links:
+    - Source: User
+      SourcePosition: E
+      Target: CloudFront
+      TargetPosition: W
+      TargetArrowHead: 
+        Type: Open
+    - Source: CloudFront
+      SourcePosition: E
+      Target: S3Bucket
+      TargetPosition: W
+      TargetArrowHead: 
+        Type: Open
+    - Source: S3Bucket
+      SourcePosition: E
+      Target: Lambda
+      TargetPosition: W
+      TargetArrowHead: 
+        Type: Open 
+    - Source: Lambda
+      SourcePosition: E
+      Target: DynamoDB
+      TargetPosition: W
+      TargetArrowHead: 
+        Type: Open

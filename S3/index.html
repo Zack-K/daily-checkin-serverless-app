@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>デイリーチェックイン</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline-block; }
+        .htmx-request[submit-btn] { opacity: 0.6; cursor: not-allowed; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen py-6 px-4 font-sans text-slate-900">
+
+    <div class="max-w-md mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+        <div class="bg-gradient-to-br from-blue-700 to-indigo-800 p-6 text-white text-center">
+            <h1 class="text-2xl font-black tracking-tight">Daily Check-in</h1>
+            <p class="text-xs opacity-70 mt-1 uppercase tracking-widest">AWS Serverless System</p>
+        </div>
+
+        <div id="response-area" class="p-6">
+            <form hx-post="/submit" 
+                  hx-target="#response-area" 
+                  hx-swap="innerHTML" 
+                  class="space-y-6">
+                
+                <section>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">記録のタイミング</label>
+                    <div class="flex gap-2">
+                        <label class="flex-1">
+                            <input type="radio" name="period" value="morning" checked 
+                                   onclick="toggleFields('morning')" class="hidden peer">
+                            <div class="text-center py-2 border-2 rounded-xl peer-checked:bg-orange-50 peer-checked:border-orange-500 peer-checked:text-orange-700 text-slate-400 transition cursor-pointer font-bold">☀️ 朝</div>
+                        </label>
+                        <label class="flex-1">
+                            <input type="radio" name="period" value="evening" 
+                                   onclick="toggleFields('evening')" class="hidden peer">
+                            <div class="text-center py-2 border-2 rounded-xl peer-checked:bg-indigo-50 peer-checked:border-indigo-500 peer-checked:text-indigo-700 text-slate-400 transition cursor-pointer font-bold">🌙 夕方</div>
+                        </label>
+                    </div>
+                </section>
+
+                <div id="morning-only-fields" class="space-y-6">
+                    <section>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">今の体調 (Condition)</label>
+                        <div class="flex gap-2">
+                            <label class="flex-1">
+                                <input type="radio" name="condition" value="好調" class="hidden peer">
+                                <div class="text-center py-2 border-2 rounded-xl peer-checked:bg-blue-50 peer-checked:border-blue-500 peer-checked:text-blue-700 text-slate-400 transition cursor-pointer">好調</div>
+                            </label>
+                            <label class="flex-1">
+                                <input type="radio" name="condition" value="普通" checked class="hidden peer">
+                                <div class="text-center py-2 border-2 rounded-xl peer-checked:bg-blue-50 peer-checked:border-blue-500 peer-checked:text-blue-700 text-slate-400 transition cursor-pointer">普通</div>
+                            </label>
+                            <label class="flex-1">
+                                <input type="radio" name="condition" value="不調" class="hidden peer">
+                                <div class="text-center py-2 border-2 rounded-xl peer-checked:bg-blue-50 peer-checked:border-blue-500 peer-checked:text-blue-700 text-slate-400 transition cursor-pointer">不調</div>
+                            </label>
+                        </div>
+                    </section>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">ルーティーン</label>
+                            <select name="routine" class="w-full bg-slate-50 border-2 border-slate-100 rounded-lg p-2 outline-none focus:border-blue-500 transition">
+                                <option value="できた">できた</option>
+                                <option value="できていない">できていない</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">学習場所</label>
+                            <select name="location" class="w-full bg-slate-50 border-2 border-slate-100 rounded-lg p-2 outline-none focus:border-blue-500 transition">
+                                <option value="通所">通所</option>
+                                <option value="在宅">在宅</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-xs font-bold text-slate-600">睡眠時間 (h)</span>
+                            <span class="text-xs font-mono font-bold text-blue-600" id="sleep-val">7.0</span>
+                        </div>
+                        <input type="range" name="sleeping_hours" min="0" max="10" step="0.5" value="7.0" 
+                               oninput="document.getElementById('sleep-val').innerText = parseFloat(this.value).toFixed(1)"
+                               class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 border-t border-slate-200 pt-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase">気力/朝</label>
+                            <input type="number" name="energy_morning" min="1" max="10" value="6" class="w-full mt-1 p-2 border rounded-lg text-center font-bold text-blue-600">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase">体力/朝</label>
+                            <input type="number" name="stamina_morning" min="1" max="10" value="6" class="w-full mt-1 p-2 border rounded-lg text-center font-bold text-blue-600">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1 uppercase">本日の学習予定 (WorkDetail)</label>
+                        <textarea name="study_content" rows="2" placeholder="例：午前 IT学習、午後 面談" class="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none text-sm transition"></textarea>
+                    </div>
+                </div>
+
+                <div id="evening-only-fields" class="hidden space-y-6">
+                    <div class="grid grid-cols-2 gap-4 border-t border-slate-200 pt-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase">気力/夕方</label>
+                            <input type="number" name="energy_evening" min="1" max="10" value="5" class="w-full mt-1 p-2 border rounded-lg text-center font-bold text-indigo-600">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase">体力/夕方</label>
+                            <input type="number" name="stamina_evening" min="1" max="10" value="5" class="w-full mt-1 p-2 border rounded-lg text-center font-bold text-indigo-600">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1 uppercase">備考・メモ (Notes)</label>
+                    <textarea name="notes" rows="2" placeholder="懸念事項などがあれば" class="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none text-sm transition"></textarea>
+                </div>
+
+                <button type="submit" 
+                        class="submit-btn w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-xl hover:bg-blue-700 transition transform active:scale-95 flex items-center justify-center gap-3">
+                    <span class="htmx-indicator animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                    <span>記録を保存する</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function toggleFields(period) {
+            const morningArea = document.getElementById('morning-only-fields');
+            const eveningArea = document.getElementById('evening-only-fields');
+
+            if (period === 'morning') {
+                morningArea.classList.remove('hidden');
+                eveningArea.classList.add('hidden');
+            } else {
+                morningArea.classList.add('hidden');
+                eveningArea.classList.remove('hidden');
+            }
+        }
+    </script>
+
+</body>
+</html>
