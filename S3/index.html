@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>デイリーチェックイン</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .htmx-indicator { display: none; }
@@ -30,13 +31,13 @@
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-2">記録のタイミング</label>
                     <div class="flex gap-2">
                         <label class="flex-1">
-                            <input type="radio" name="period" value="morning" checked 
-                                   onclick="toggleFields('morning')" class="hidden peer">
+                            <input type="radio" name="period" value="morning" checked class="hidden peer"
+                                   _="on click remove .hidden from #morning-only-fields then add .hidden to #evening-only-fields">
                             <div class="text-center py-2 border-2 rounded-xl peer-checked:bg-orange-50 peer-checked:border-orange-500 peer-checked:text-orange-700 text-slate-400 transition cursor-pointer font-bold">☀️ 朝</div>
                         </label>
                         <label class="flex-1">
-                            <input type="radio" name="period" value="evening" 
-                                   onclick="toggleFields('evening')" class="hidden peer">
+                            <input type="radio" name="period" value="evening" class="hidden peer"
+                                   _="on click add .hidden to #morning-only-fields then remove .hidden from #evening-only-fields">
                             <div class="text-center py-2 border-2 rounded-xl peer-checked:bg-indigo-50 peer-checked:border-indigo-500 peer-checked:text-indigo-700 text-slate-400 transition cursor-pointer font-bold">🌙 夕方</div>
                         </label>
                     </div>
@@ -92,7 +93,7 @@
                             <span class="text-xs font-mono font-bold text-blue-600" id="sleep-val">7.0</span>
                         </div>
                         <input type="range" name="sleeping_hours" min="0" max="10" step="0.5" value="7.0" 
-                               oninput="document.getElementById('sleep-val').innerText = parseFloat(this.value).toFixed(1)"
+                               _="on input put parseFloat(me.value).toFixed(1) into #sleep-val"
                                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
                     </div>
 
@@ -139,21 +140,6 @@
             </form>
         </div>
     </div>
-
-    <script>
-        function toggleFields(period) {
-            const morningArea = document.getElementById('morning-only-fields');
-            const eveningArea = document.getElementById('evening-only-fields');
-
-            if (period === 'morning') {
-                morningArea.classList.remove('hidden');
-                eveningArea.classList.add('hidden');
-            } else {
-                morningArea.classList.add('hidden');
-                eveningArea.classList.remove('hidden');
-            }
-        }
-    </script>
 
 </body>
 </html>
