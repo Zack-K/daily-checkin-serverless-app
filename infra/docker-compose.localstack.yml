@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  localstack:
+    container_name: daily-checkin-localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # external services port range
+    environment:
+      # LocalStack configuration
+      - DEBUG=${DEBUG-}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LAMBDA_EXECUTOR=${LAMBDA_EXECUTOR-}
+      - LOCALSTACK_API_KEY=${LOCALSTACK_API_KEY-}  # only required for Pro features
+      
+      # Services to start
+      - SERVICES=s3,dynamodb,lambda,cloudformation,iam,cloudfront,ssm
+      
+      # Data persistence
+      - DATA_DIR=${DATA_DIR-}
+      - PERSISTENCE=${PERSISTENCE-}
+      
+      # Additional settings
+      - SKIP_INFRA_DOWNLOADS=0
+      - LAMBDA_REMOVE_CONTAINERS=true
+      - EDGE_PORT=4566
+      
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - localstack-network
+
+networks:
+  localstack-network:
+    driver: bridge
