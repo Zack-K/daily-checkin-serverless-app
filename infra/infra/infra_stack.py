@@ -3,6 +3,7 @@ from aws_cdk import (
     Stack,
     Tags,
     CfnOutput,
+    RemovalPolicy,
     aws_s3 as s3,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
@@ -32,7 +33,7 @@ class DailyCheckinStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # 環境パラメータの設定
-        self.environment = environment
+        self.env_name = environment
         self.project_name = project_name
         self.is_local = environment == "local"
         
@@ -65,7 +66,7 @@ class DailyCheckinStack(Stack):
         すべてのリソースに環境とプロジェクト識別子でタグ付け
         要件 7.3 に対応
         """
-        Tags.of(self).add("Environment", self.environment)
+        Tags.of(self).add("Environment", self.env_name)
         Tags.of(self).add("Project", self.project_name)
         Tags.of(self).add("ManagedBy", "CDK")
         Tags.of(self).add("Application", "DailyCheckin")
@@ -74,9 +75,32 @@ class DailyCheckinStack(Stack):
         """
         DynamoDBテーブルの作成
         将来的に複数のLambda関数から共有される
+        
+        要件 5.1: 既存の"DailyHealthLog"テーブルと同じスキーマでDynamoDBテーブルを作成
+        要件 5.2: パーティションキーとして"Date"を持つ（文字列型）
+        要件 5.3: ソートキーとして"Period"を持つ（文字列型）
+        要件 5.4: コスト最適化のためにオンデマンド課金モードを使用
+        要件 5.5: データ保護のためにポイントインタイムリカバリを有効
         """
-        # TODO: 次のタスクで実装
-        pass
+        table = dynamodb.Table(
+            self, "DailyHealthLogTable",
+            table_name="DailyHealthLog",
+            partition_key=dynamodb.Attribute(
+                name="Date",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="Period", 
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+            removal_policy=self._get_removal_policy()
+        )
+        
+        return table
 
     def _create_submit_lambda(self) -> _lambda.Function:
         """
@@ -106,6 +130,25 @@ class DailyCheckinStack(Stack):
         要件 7.5 に対応
         """
         # TODO: 次のタスクで実装
+        pass
+
+    def _get_removal_policy(self) -> RemovalPolicy:
+        """
+        環境に応じた削除ポリシーを返す
+        ローカル環境では削除を許可、本番環境では保持
+        """
+        if self.is_local or self.env_name == "dev":
+            return RemovalPolicy.DESTROY
+        else:
+            return RemovalPolicy.RETAIN
+
+    def _configure_localstack(self) -> None:
+        """
+        LocalStack環境用の設定
+        要件 9.2 に対応
+        """
+        # LocalStack用のエンドポイント設定は環境変数で制御
+        # AWS_ENDPOINT_URL環境変数が設定されている場合、CDKが自動的に使用
         pass
 
     # 将来の拡張用メソッド例（コメントアウト）
