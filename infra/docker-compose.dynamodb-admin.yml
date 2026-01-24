@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin:latest
+    ports:
+      - "8001:8001"
+    environment:
+      - DYNAMO_ENDPOINT=http://host.docker.internal:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    depends_on:
+      - localstack
+    networks:
+      - infra_localstack-network
+
+  localstack:
+    container_name: daily-checkin-localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,dynamodb,lambda,cloudformation,iam,cloudfront,ssm
+      - DEBUG=1
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - infra_localstack-network
+
+networks:
+  infra_localstack-network:
+    driver: bridge
