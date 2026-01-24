@@ -3,26 +3,32 @@ import os
 
 import aws_cdk as cdk
 
-from infra.infra_stack import InfraStack
+from infra.infra_stack import DailyCheckinStack
 
 
 app = cdk.App()
-InfraStack(app, "InfraStack",
-    # If you don't specify 'env', this stack will be environment-agnostic.
-    # Account/Region-dependent features and context lookups will not work,
-    # but a single synthesized template can be deployed anywhere.
 
-    # Uncomment the next line to specialize this stack for the AWS Account
-    # and Region that are implied by the current CLI configuration.
+# 環境パラメータの取得（デフォルト値付き）
+environment = app.node.try_get_context("environment") or "dev"
+project_name = app.node.try_get_context("project_name") or "daily-checkin"
 
-    #env=cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION')),
+# LocalStack環境の場合の特別な設定
+if environment == "local":
+    # LocalStack用の環境変数設定
+    os.environ.setdefault("CDK_DEFAULT_REGION", "us-east-1")
+    os.environ.setdefault("CDK_DEFAULT_ACCOUNT", "000000000000")  # LocalStackのデフォルトアカウント
 
-    # Uncomment the next line if you know exactly what Account and Region you
-    # want to deploy the stack to. */
-
-    #env=cdk.Environment(account='123456789012', region='us-east-1'),
-
-    # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
-    )
+# CDKスタックの作成
+DailyCheckinStack(
+    app, 
+    f"DailyCheckin-{environment.title()}Stack",
+    environment=environment,
+    project_name=project_name,
+    # AWS環境の設定
+    env=cdk.Environment(
+        account=os.getenv('CDK_DEFAULT_ACCOUNT'), 
+        region=os.getenv('CDK_DEFAULT_REGION') or 'us-east-1'
+    ),
+)
 
 app.synth()
