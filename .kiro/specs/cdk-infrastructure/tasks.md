@@ -26,7 +26,7 @@
   - **プロパティ5: DynamoDBテーブル設定の正確性**
   - **検証対象: 要件 5.1, 5.2, 5.3, 5.4, 5.5**
 
-- [ ] 3. Lambda関数の実装
+- [x] 3. Lambda関数の実装
   - 既存のlamda/submit_daily_checkin.pyを使用したLambda関数作成
   - Python 3.9ランタイムとタイムアウト設定
   - DynamoDBテーブル名の環境変数設定
