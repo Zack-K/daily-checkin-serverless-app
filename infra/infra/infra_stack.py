@@ -102,6 +102,40 @@ class DailyCheckinStack(Stack):
         
         return table
 
+    def _create_lambda_execution_role(self) -> iam.Role:
+        """
+        Lambda関数用のカスタムIAMロールを作成
+        最小権限の原則に従った権限設定
+        
+        要件 6.1: 最小限の必要な権限を持つIAMロールを持つ
+        要件 6.3: CloudWatchへのログ書き込み権限を持つ
+        要件 6.5: 過度に許可的なIAMポリシーを作成してはならない
+        """
+        # Lambda実行用の基本ロール
+        lambda_role = iam.Role(
+            self, "SubmitCheckinLambdaRole",
+            role_name=f"{self.resource_prefix}-submit-checkin-role",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="デイリーチェックイン送信Lambda関数用の最小権限ロール"
+        )
+        
+        # CloudWatchログ書き込み権限を付与
+        # 要件 6.3: CloudWatchへのログ書き込み権限を持つ
+        lambda_role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "service-role/AWSLambdaBasicExecutionRole"
+            )
+        )
+        
+        # VPC内でLambdaを実行する場合のネットワーク権限（現在は不要だが将来の拡張性を考慮）
+        # lambda_role.add_managed_policy(
+        #     iam.ManagedPolicy.from_aws_managed_policy_name(
+        #         "service-role/AWSLambdaVPCAccessExecutionRole"
+        #     )
+        # )
+        
+        return lambda_role
+
     def _create_submit_lambda(self) -> _lambda.Function:
         """
         フォーム送信処理用Lambda関数
@@ -112,6 +146,10 @@ class DailyCheckinStack(Stack):
         要件 3.4: DynamoDBテーブル名用の環境変数を設定
         要件 3.5: 既存の処理要件に対応するために少なくとも30秒のタイムアウトを持つ
         """
+        # Lambda関数用のカスタムIAMロールを作成
+        # 要件 6.1: 最小限の必要な権限を持つIAMロールを持つ
+        lambda_role = self._create_lambda_execution_role()
+        
         lambda_function = _lambda.Function(
             self, "SubmitCheckinFunction",
             function_name=f"{self.resource_prefix}-submit-checkin",
@@ -123,11 +161,12 @@ class DailyCheckinStack(Stack):
             environment={
                 "DYNAMODB_TABLE_NAME": self.dynamodb_table.table_name
             },
-            description="デイリーチェックインフォーム送信処理用Lambda関数"
+            description="デイリーチェックインフォーム送信処理用Lambda関数",
+            role=lambda_role  # カスタムロールを使用
         )
         
         # DynamoDBテーブルへの書き込み権限を付与
-        # 要件 3.3: 既存のDynamoDBテーブル"DailyHealthLog"への書き込みに適切なIAM権限を持つ
+        # 要件 3.3, 6.2: DynamoDBテーブルへのアイテム書き込み権限のみを持つ
         self.dynamodb_table.grant_write_data(lambda_function)
         
         return lambda_function
