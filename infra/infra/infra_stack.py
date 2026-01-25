@@ -106,9 +106,31 @@ class DailyCheckinStack(Stack):
         """
         フォーム送信処理用Lambda関数
         既存のsubmit_daily_checkin.pyを使用
+        
+        要件 3.1: 既存のlamda/submit_daily_checkin.pyファイルを使用してLambda関数を作成
+        要件 3.2: 既存コードと互換性のあるPython 3.9以降のランタイムで設定
+        要件 3.4: DynamoDBテーブル名用の環境変数を設定
+        要件 3.5: 既存の処理要件に対応するために少なくとも30秒のタイムアウトを持つ
         """
-        # TODO: 次のタスクで実装
-        pass
+        lambda_function = _lambda.Function(
+            self, "SubmitCheckinFunction",
+            function_name=f"{self.resource_prefix}-submit-checkin",
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            code=_lambda.Code.from_asset("../lamda"),  # 既存のlamdaディレクトリを使用
+            handler="submit_daily_checkin.lambda_handler",
+            timeout=Duration.seconds(30),
+            memory_size=128,  # 最小構成でコスト最適化
+            environment={
+                "DYNAMODB_TABLE_NAME": self.dynamodb_table.table_name
+            },
+            description="デイリーチェックインフォーム送信処理用Lambda関数"
+        )
+        
+        # DynamoDBテーブルへの書き込み権限を付与
+        # 要件 3.3: 既存のDynamoDBテーブル"DailyHealthLog"への書き込みに適切なIAM権限を持つ
+        self.dynamodb_table.grant_write_data(lambda_function)
+        
+        return lambda_function
 
     def _create_static_website(self) -> s3.Bucket:
         """
