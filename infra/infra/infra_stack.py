@@ -54,9 +54,9 @@ class DailyCheckinStack(Stack):
         # 2. Lambda関数群（機能別に整理）
         self.submit_function = self._create_submit_lambda()
         
-        # 3. フロントエンドリソース（次のPRで実装予定）
-        # self.s3_bucket = self._create_static_website()
-        # self.cloudfront_distribution = self._create_cdn()
+        # 3. フロントエンドリソース
+        self.s3_bucket = self._create_static_website()
+        self.cloudfront_distribution = self._create_cdn()
         
         # 4. 出力値の設定
         self._create_outputs()
@@ -171,19 +171,65 @@ class DailyCheckinStack(Stack):
         
         return lambda_function
 
-    def _create_static_website(self) -> Optional[s3.Bucket]:
+    def _create_static_website(self) -> s3.Bucket:
         """
         静的ウェブサイト用S3バケット
+        既存のS3/index.htmlをCDKで管理
+        
+        要件 1.1: 既存のS3バケット設定と同等の静的ウェブサイトホスティング用バケットを作成
+        要件 1.2: 既存のS3/index.htmlファイルを新しいバケットにデプロイする機能を提供
+        要件 1.3: ウェブサイトホスティングに適切なパブリック読み取り権限を設定（CloudFront経由のみ）
+        要件 1.4: デプロイロールバック機能のためにバージョニングを有効
+        要件 1.5: セキュリティベストプラクティスに従ってアクセス制御を設定
         """
-        # TODO: 次のタスクで実装
-        return None
+        bucket = s3.Bucket(
+            self, "StaticWebsiteBucket",
+            bucket_name=f"{self.resource_prefix}-static-website",
+            versioned=True,  # 要件 1.4: バージョニング有効
+            public_read_access=False,  # 要件 1.3: CloudFront経由のみアクセス許可
+            block_public_access=s3.BlockPublicAccess.BLOCK_ACLS,  # 要件 1.5: セキュリティベストプラクティス
+            removal_policy=self._get_removal_policy(),
+            auto_delete_objects=self.is_local or self.env_name == "dev"  # 開発環境では自動削除
+        )
+        
+        return bucket
 
-    def _create_cdn(self) -> Optional[cloudfront.Distribution]:
+    def _create_cdn(self) -> cloudfront.Distribution:
         """
         CloudFrontディストリビューション
+        S3バケットをオリジンとするCDN配信
+        
+        要件 2.1: S3バケットを指すCloudFrontディストリビューションを作成
+        要件 2.2: デフォルトでHTTPS有効でコンテンツを配信
+        要件 2.3: 適切なTTL設定で静的アセットをキャッシュ
+        要件 2.4: デフォルトルートオブジェクトを"index.html"として設定
         """
-        # TODO: 次のタスクで実装
-        return None
+        # Origin Access Identity (OAI) を作成してS3バケットへの安全なアクセスを提供
+        oai = cloudfront.OriginAccessIdentity(
+            self, "WebsiteOAI",
+            comment=f"{self.resource_prefix} static website OAI"
+        )
+        
+        # S3バケットにOAIからの読み取り権限を付与
+        self.s3_bucket.grant_read(oai)
+        
+        # CloudFrontディストリビューションを作成
+        distribution = cloudfront.Distribution(
+            self, "WebsiteDistribution",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3Origin(
+                    self.s3_bucket, 
+                    origin_access_identity=oai
+                ),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,  # 要件 2.2: HTTPS強制
+                cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED  # 要件 2.3: 静的アセット用最適化キャッシュ
+            ),
+            default_root_object="index.html",  # 要件 2.4: デフォルトルートオブジェクト
+            comment=f"{self.resource_prefix} static website distribution",
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100  # コスト最適化のため最小価格クラス
+        )
+        
+        return distribution
 
     def _create_outputs(self) -> None:
         """
