@@ -3,37 +3,6 @@
 以下は今回のPRで追加されたLambda関数バージョニング機能のユニットテストです：
 
 ```python
-def test_lambda_versioning_production_environment():
-    """本番環境でのLambda関数バージョニング設定をテスト"""
-    app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="prod", project_name="test-project")
-    template = assertions.Template.from_stack(stack)
-    
-    # Lambda関数のエイリアスが作成されることを確認
-    template.resource_count_is("AWS::Lambda::Alias", 2)
-    
-    # LIVE エイリアスの設定を確認
-    template.has_resource_properties("AWS::Lambda::Alias", {
-        "Name": "LIVE",
-        "Description": "本番環境用のLambda関数エイリアス"
-    })
-    
-    # STAGING エイリアスの設定を確認
-    template.has_resource_properties("AWS::Lambda::Alias", {
-        "Name": "STAGING", 
-        "Description": "ステージング環境用のLambda関数エイリアス"
-    })
-    
-    # エイリアスARNの出力を確認
-    template.has_output("LambdaLiveAliasArn", {
-        "Description": "Lambda function LIVE alias ARN"
-    })
-    
-    template.has_output("LambdaStagingAliasArn", {
-        "Description": "Lambda function STAGING alias ARN"
-    })
-
-
 def test_lambda_versioning_development_environment():
     """開発環境でのLambda関数バージョニング設定をテスト（バージョニング無効）"""
     app = core.App()
@@ -77,7 +46,7 @@ def test_lambda_versioning_comprehensive():
     })
     
     # Lambda関数とバージョニングの統合確認
-    template.resource_count_is("AWS::Lambda::Function", 2)  # バージョニングにより複数作成
+    template.resource_count_is("AWS::Lambda::Function", 2)  # Lambda関数 + BucketDeployment用Lambda
     template.resource_count_is("AWS::Lambda::Alias", 2)     # LIVEとSTAGINGエイリアス
     template.resource_count_is("AWS::Lambda::Url", 1)       # Function URL
 
@@ -103,21 +72,20 @@ def test_environment_specific_versioning_behavior():
 
 ## テスト結果
 
-- **総テスト数**: 23個
-- **成功**: 23個 (100%)
+- **総テスト数**: 20個
+- **成功**: 20個 (100%)
 - **失敗**: 0個
 
 ## テスト改善点
 
 CodeRabbitの指摘に基づき、以下の改善を実施：
 
-1. **テストの統合**: 関連する機能テストを`test_lambda_versioning_comprehensive`に統合
-2. **テストの強化**: より包括的な検証を単一テストで実行
-3. **重複の削除**: 類似のテスト内容を統合してメンテナンス性を向上
+1. **重複テストの削除**: `test_lambda_versioning_production_environment`を削除し、`test_lambda_versioning_comprehensive`に統合
+2. **誤解を招くコメントの修正**: Lambda関数の数について正確な説明に変更（バージョニングではなくBucketDeploymentが追加のLambda関数を作成）
+3. **テストの効率化**: 重複を削除してメンテナンス性を向上
 
 これらのテストは以下の機能をカバーしています：
 
-1. **本番環境でのLambda関数バージョニング**: LIVEとSTAGINGエイリアスの作成
-2. **開発環境でのバージョニング無効化**: 簡素化のためエイリアス作成なし
-3. **包括的なバージョニング機能**: エイリアス設定、出力、統合の全体確認
-4. **環境固有の動作**: 各環境での適切なバージョニング動作確認
+1. **開発環境でのバージョニング無効化**: 簡素化のためエイリアス作成なし
+2. **包括的なバージョニング機能**: エイリアス設定、出力、統合の全体確認（本番環境）
+3. **環境固有の動作**: 各環境での適切なバージョニング動作確認
