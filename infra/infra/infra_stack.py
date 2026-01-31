@@ -204,10 +204,14 @@ class DailyCheckinStack(Stack):
         # 要件 4.2: フロントエンドアプリケーションからのPOSTリクエストを受け入れる
         # 要件 4.3: CloudFrontドメインからのリクエストを許可するCORSを設定
         # 要件 4.4: パブリックアクセス用にNONE認証タイプを使用
+        
+        # 環境に応じたCORS設定
+        cors_origins = self._get_cors_origins()
+        
         function_url = lambda_function.add_function_url(
             auth_type=_lambda.FunctionUrlAuthType.NONE,
             cors=_lambda.FunctionUrlCorsOptions(
-                allowed_origins=["*"],  # 本番では特定ドメインに制限を推奨
+                allowed_origins=cors_origins,
                 allowed_methods=[_lambda.HttpMethod.POST],
                 allowed_headers=["Content-Type", "X-Requested-With"],
                 max_age=Duration.seconds(300)
@@ -253,6 +257,8 @@ class DailyCheckinStack(Stack):
         要件 2.4: デフォルトルートオブジェクトを"index.html"として設定
         """
         # Origin Access Identity (OAI) を作成してS3バケットへの安全なアクセスを提供
+        # 注意: 将来的にはOrigin Access Control (OAC)への移行を推奨
+        # OACはより強固なセキュリティを提供するが、現在のCDKバージョンでは未対応
         oai = cloudfront.OriginAccessIdentity(
             self, "WebsiteOAI",
             comment=f"{self.resource_prefix} static website OAI"
@@ -333,6 +339,31 @@ class DailyCheckinStack(Stack):
             description="DynamoDB table name for daily health logs",
             export_name=f"{self.resource_prefix}-dynamodb-table"
         )
+
+    def _get_cors_origins(self) -> list[str]:
+        """
+        環境に応じたCORS許可オリジンを返す
+        
+        Returns:
+            list[str]: 許可するオリジンのリスト
+            
+        Note:
+            - local/dev/test環境: 全てのオリジンを許可（開発用）
+            - staging/prod環境: 特定のドメインのみ許可（セキュリティ強化）
+        """
+        if self.is_local or self.env_name in ["dev", "test"]:
+            # 開発・テスト環境では全てのオリジンを許可
+            return ["*"]
+        elif self.env_name == "staging":
+            # ステージング環境では特定のドメインを許可
+            return [
+                "https://staging.daily-checkin.example.com"  # 実際のステージングドメインに置き換え
+            ]
+        else:  # prod環境
+            # 本番環境では本番ドメインのみ許可
+            return [
+                "https://daily-checkin.example.com"  # 実際の本番ドメインに置き換え
+            ]
 
     def _get_removal_policy(self) -> RemovalPolicy:
         """

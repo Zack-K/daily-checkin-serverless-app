@@ -40,10 +40,10 @@ def test_cloudfront_default_root_object():
     })
 
 def test_origin_access_identity_created():
-    """Origin Access Identityが作成されることをテスト"""
+    """Origin Access Identity (OAI)が作成されることをテスト"""
     app = core.App()
     stack = DailyCheckinStack(app, "test-stack", environment="test")
     template = assertions.Template.from_stack(stack)
 
-    # OAIの作成確認
+    # OAIの作成確認（将来的にはOACに移行予定）
     template.resource_count_is("AWS::CloudFront::CloudFrontOriginAccessIdentity", 1)

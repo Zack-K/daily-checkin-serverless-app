@@ -84,7 +84,7 @@ def test_lambda_function_url_created():
         "AuthType": "NONE",
         "Cors": {
             "AllowMethods": ["POST"],
-            "AllowOrigins": ["*"],
+            "AllowOrigins": ["*"],  # test環境では全てのオリジンを許可
             "AllowHeaders": ["Content-Type", "X-Requested-With"]
         }
     })
@@ -200,5 +200,29 @@ def test_s3_bucket_security_configuration():
             "BlockPublicPolicy": True,
             "IgnorePublicAcls": True,
             "RestrictPublicBuckets": True
+        }
+    })
+
+def test_cors_configuration_environment_aware():
+    """Test that CORS configuration is environment-aware"""
+    # Test development environment (allows all origins)
+    dev_app = core.App()
+    dev_stack = DailyCheckinStack(dev_app, "dev-stack", environment="dev")
+    dev_template = assertions.Template.from_stack(dev_stack)
+    
+    dev_template.has_resource_properties("AWS::Lambda::Url", {
+        "Cors": {
+            "AllowOrigins": ["*"]
+        }
+    })
+    
+    # Test production environment (restricted origins)
+    prod_app = core.App()
+    prod_stack = DailyCheckinStack(prod_app, "prod-stack", environment="prod")
+    prod_template = assertions.Template.from_stack(prod_stack)
+    
+    prod_template.has_resource_properties("AWS::Lambda::Url", {
+        "Cors": {
+            "AllowOrigins": ["https://daily-checkin.example.com"]
         }
     })
