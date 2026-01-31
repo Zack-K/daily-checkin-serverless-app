@@ -172,7 +172,7 @@ class DailyCheckinStack(Stack):
         既存のsubmit_daily_checkin.pyを使用
         
         要件 3.1: 既存のlamda/submit_daily_checkin.pyファイルを使用してLambda関数を作成
-        要件 3.2: 既存コードと互換性のあるPython 3.9以降のランタイムで設定
+        要件 3.2: 既存コードと互換性のあるPython 3.12ランタイムで設定
         要件 3.4: DynamoDBテーブル名用の環境変数を設定
         要件 3.5: 既存の処理要件に対応するために少なくとも30秒のタイムアウトを持つ
         """
@@ -183,7 +183,7 @@ class DailyCheckinStack(Stack):
         lambda_function = _lambda.Function(
             self, "SubmitCheckinFunction",
             function_name=f"{self.resource_prefix}-submit-checkin",
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             code=_lambda.Code.from_asset("../lamda"),  # 既存のlamdaディレクトリを使用
             handler="submit_daily_checkin.lambda_handler",
             timeout=Duration.seconds(30),
@@ -235,7 +235,7 @@ class DailyCheckinStack(Stack):
             bucket_name=f"{self.resource_prefix}-static-website",
             versioned=True,  # 要件 1.4: バージョニング有効
             public_read_access=False,  # 要件 1.3: CloudFront経由のみアクセス許可
-            block_public_access=s3.BlockPublicAccess.BLOCK_ACLS,  # 要件 1.5: セキュリティベストプラクティス
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # 要件 1.5: セキュリティベストプラクティス - 全てブロック
             removal_policy=self._get_removal_policy(),
             auto_delete_objects=self.is_local or self.env_name == "dev"  # 開発環境では自動削除
         )

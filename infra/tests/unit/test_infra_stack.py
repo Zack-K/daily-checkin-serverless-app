@@ -112,7 +112,7 @@ def test_lambda_function_created():
     # 要件 3.1-3.5: Lambda関数設定
     template.resource_count_is("AWS::Lambda::Function", 2)
     template.has_resource_properties("AWS::Lambda::Function", {
-        "Runtime": "python3.9",
+        "Runtime": "python3.12",
         "Handler": "submit_daily_checkin.lambda_handler",
         "Timeout": 30,
         "MemorySize": 128
@@ -192,11 +192,13 @@ def test_s3_bucket_security_configuration():
     stack = DailyCheckinStack(app, "test-stack", environment="test")
     template = assertions.Template.from_stack(stack)
 
-    # Test S3 bucket security settings (実際の設定に合わせて調整)
+    # Test S3 bucket security settings - 全4つのパブリックアクセスブロック設定をテスト
     # 要件 1.3, 1.5: セキュリティベストプラクティス
     template.has_resource_properties("AWS::S3::Bucket", {
         "PublicAccessBlockConfiguration": {
             "BlockPublicAcls": True,
-            "IgnorePublicAcls": True
+            "BlockPublicPolicy": True,
+            "IgnorePublicAcls": True,
+            "RestrictPublicBuckets": True
         }
     })
