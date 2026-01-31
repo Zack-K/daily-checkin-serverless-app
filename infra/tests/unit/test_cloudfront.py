@@ -5,7 +5,7 @@ from infra.infra_stack import DailyCheckinStack
 def test_cloudfront_distribution_created():
     """CloudFrontディストリビューションが正しく作成されることをテスト"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # 要件 2.1: S3バケットを指すCloudFrontディストリビューションを作成
@@ -14,7 +14,7 @@ def test_cloudfront_distribution_created():
 def test_cloudfront_https_redirect():
     """HTTPS強制リダイレクトが設定されていることをテスト"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # 要件 2.2: デフォルトでHTTPS有効でコンテンツを配信
@@ -29,7 +29,7 @@ def test_cloudfront_https_redirect():
 def test_cloudfront_default_root_object():
     """デフォルトルートオブジェクトがindex.htmlに設定されていることをテスト"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # 要件 2.4: デフォルトルートオブジェクトを"index.html"として設定
@@ -42,7 +42,7 @@ def test_cloudfront_default_root_object():
 def test_origin_access_identity_created():
     """Origin Access Identity (OAI)が作成されることをテスト"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # OAIの作成確認（将来的にはOACに移行予定）
