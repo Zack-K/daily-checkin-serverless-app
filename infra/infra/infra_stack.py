@@ -13,7 +13,6 @@ from aws_cdk import (
     aws_s3_deployment as s3deploy,
 )
 from constructs import Construct
-from typing import Optional
 
 class DailyCheckinStack(Stack):
     """
@@ -221,6 +220,10 @@ class DailyCheckinStack(Stack):
         # Function URLを属性として保存（出力で使用）
         self.function_url = function_url.url
         
+        # Lambda関数バージョニングの設定
+        # 要件 8.3: Lambda関数のバージョニング設定とロールバック機能のサポート
+        self._setup_lambda_versioning(lambda_function)
+        
         return lambda_function
 
     def _create_static_website(self) -> s3.Bucket:
@@ -383,6 +386,57 @@ class DailyCheckinStack(Stack):
         # LocalStack用のエンドポイント設定は環境変数で制御
         # AWS_ENDPOINT_URL環境変数が設定されている場合、CDKが自動的に使用
         pass
+
+    def _setup_lambda_versioning(self, lambda_function: _lambda.Function) -> None:
+        """
+        Lambda関数のバージョニング設定
+        
+        Args:
+            lambda_function: バージョニングを設定するLambda関数
+            
+        要件 8.3: Lambda関数のバージョニング設定とロールバック機能のサポート
+        
+        Note:
+            - 本番環境では自動バージョニングを有効化
+            - 開発環境では簡素化のためバージョニングを無効化
+            - エイリアスを使用してトラフィックルーティングを制御
+        """
+        if not (self.is_local or self.env_name == "dev"):
+            # 本番環境でのみバージョニングを有効化
+            
+            # Lambda関数の現在バージョンを作成
+            version = lambda_function.current_version
+            
+            # 本番用エイリアス（LIVE）を作成
+            live_alias = _lambda.Alias(
+                self, "SubmitCheckinLiveAlias",
+                alias_name="LIVE",
+                version=version,
+                description="本番環境用のLambda関数エイリアス"
+            )
+            
+            # ステージング用エイリアス（STAGING）を作成（段階的デプロイ用）
+            staging_alias = _lambda.Alias(
+                self, "SubmitCheckinStagingAlias", 
+                alias_name="STAGING",
+                version=version,
+                description="ステージング環境用のLambda関数エイリアス"
+            )
+            
+            # エイリアスのARNを出力（デプロイ時の参照用）
+            CfnOutput(
+                self, "LambdaLiveAliasArn",
+                value=live_alias.function_arn,
+                description="Lambda function LIVE alias ARN",
+                export_name=f"{self.resource_prefix}-lambda-live-alias-arn"
+            )
+            
+            CfnOutput(
+                self, "LambdaStagingAliasArn", 
+                value=staging_alias.function_arn,
+                description="Lambda function STAGING alias ARN",
+                export_name=f"{self.resource_prefix}-lambda-staging-alias-arn"
+            )
 
     # 将来の拡張用メソッド例（コメントアウト）
     # def _create_get_logs_lambda(self) -> _lambda.Function:

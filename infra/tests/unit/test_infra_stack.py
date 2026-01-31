@@ -226,3 +226,43 @@ def test_cors_configuration_environment_aware():
             "AllowOrigins": ["https://daily-checkin.example.com"]
         }
     })
+
+def test_lambda_versioning_production_environment():
+    """本番環境でのLambda関数バージョニング設定をテスト"""
+    app = core.App()
+    stack = DailyCheckinStack(app, "test-stack", environment="prod", project_name="test-project")
+    template = assertions.Template.from_stack(stack)
+    
+    # Lambda関数のエイリアスが作成されることを確認
+    template.resource_count_is("AWS::Lambda::Alias", 2)
+    
+    # LIVE エイリアスの設定を確認
+    template.has_resource_properties("AWS::Lambda::Alias", {
+        "Name": "LIVE",
+        "Description": "本番環境用のLambda関数エイリアス"
+    })
+    
+    # STAGING エイリアスの設定を確認
+    template.has_resource_properties("AWS::Lambda::Alias", {
+        "Name": "STAGING", 
+        "Description": "ステージング環境用のLambda関数エイリアス"
+    })
+    
+    # エイリアスARNの出力を確認
+    template.has_output("LambdaLiveAliasArn", {
+        "Description": "Lambda function LIVE alias ARN"
+    })
+    
+    template.has_output("LambdaStagingAliasArn", {
+        "Description": "Lambda function STAGING alias ARN"
+    })
+
+
+def test_lambda_versioning_development_environment():
+    """開発環境でのLambda関数バージョニング設定をテスト（バージョニング無効）"""
+    app = core.App()
+    stack = DailyCheckinStack(app, "test-stack", environment="dev", project_name="test-project")
+    template = assertions.Template.from_stack(stack)
+    
+    # 開発環境ではエイリアスが作成されないことを確認
+    template.resource_count_is("AWS::Lambda::Alias", 0)
