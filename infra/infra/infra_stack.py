@@ -172,6 +172,24 @@ class DailyCheckinStack(Stack):
         # 要件 3.3, 6.2: DynamoDBテーブルへのアイテム書き込み権限のみを持つ
         self.dynamodb_table.grant_write_data(lambda_function)
         
+        # Lambda Function URLの作成
+        # 要件 4.1: 直接HTTPアクセス用のLambda Function URLを作成
+        # 要件 4.2: フロントエンドアプリケーションからのPOSTリクエストを受け入れる
+        # 要件 4.3: CloudFrontドメインからのリクエストを許可するCORSを設定
+        # 要件 4.4: パブリックアクセス用にNONE認証タイプを使用
+        function_url = lambda_function.add_function_url(
+            auth_type=_lambda.FunctionUrlAuthType.NONE,
+            cors=_lambda.FunctionUrlCorsOptions(
+                allowed_origins=["*"],  # 本番では特定ドメインに制限を推奨
+                allowed_methods=[_lambda.HttpMethod.POST],
+                allowed_headers=["Content-Type", "X-Requested-With"],
+                max_age=Duration.seconds(300)
+            )
+        )
+        
+        # Function URLを属性として保存（出力で使用）
+        self.function_url = function_url.url
+        
         return lambda_function
 
     def _create_static_website(self) -> s3.Bucket:
@@ -255,10 +273,39 @@ class DailyCheckinStack(Stack):
     def _create_outputs(self) -> None:
         """
         重要なリソース識別子の出力
-        要件 7.5 に対応
+        要件 7.5: 重要なリソース識別子（CloudFront URL、Function URL）を出力
         """
-        # TODO: 次のタスクで実装
-        pass
+        # CloudFront URL の出力
+        CfnOutput(
+            self, "CloudFrontURL",
+            value=f"https://{self.cloudfront_distribution.distribution_domain_name}",
+            description="CloudFront distribution URL for static website",
+            export_name=f"{self.resource_prefix}-cloudfront-url"
+        )
+        
+        # Lambda Function URL の出力
+        CfnOutput(
+            self, "LambdaFunctionURL",
+            value=self.function_url,
+            description="Lambda Function URL for form submission",
+            export_name=f"{self.resource_prefix}-function-url"
+        )
+        
+        # S3バケット名の出力
+        CfnOutput(
+            self, "S3BucketName",
+            value=self.s3_bucket.bucket_name,
+            description="S3 bucket name for static website",
+            export_name=f"{self.resource_prefix}-s3-bucket"
+        )
+        
+        # DynamoDBテーブル名の出力
+        CfnOutput(
+            self, "DynamoDBTableName",
+            value=self.dynamodb_table.table_name,
+            description="DynamoDB table name for daily health logs",
+            export_name=f"{self.resource_prefix}-dynamodb-table"
+        )
 
     def _get_removal_policy(self) -> RemovalPolicy:
         """

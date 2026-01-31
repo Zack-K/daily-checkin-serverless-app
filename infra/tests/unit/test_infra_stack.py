@@ -70,3 +70,34 @@ def test_s3_bucket_created():
             "Status": "Enabled"
         }
     })
+
+def test_lambda_function_url_created():
+    """Test that Lambda Function URL is created with correct configuration"""
+    app = core.App()
+    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    template = assertions.Template.from_stack(stack)
+
+    # Test Lambda Function URL creation
+    # 要件 4.1-4.4: Function URL設定
+    template.resource_count_is("AWS::Lambda::Url", 1)
+    template.has_resource_properties("AWS::Lambda::Url", {
+        "AuthType": "NONE",
+        "Cors": {
+            "AllowMethods": ["POST"],
+            "AllowOrigins": ["*"],
+            "AllowHeaders": ["Content-Type", "X-Requested-With"]
+        }
+    })
+
+def test_cdk_outputs_created():
+    """Test that CDK outputs are created"""
+    app = core.App()
+    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    template = assertions.Template.from_stack(stack)
+
+    # Test that outputs are created
+    # 要件 7.5: 重要なリソース識別子の出力
+    template.has_output("CloudFrontURL", {})
+    template.has_output("LambdaFunctionURL", {})
+    template.has_output("S3BucketName", {})
+    template.has_output("DynamoDBTableName", {})
