@@ -5,6 +5,9 @@ __pycache__
 .venv
 *.egg-info
 
+# Python環境管理
+.python-version
+
 # CDK asset staging directory
 .cdk.staging
 cdk.out

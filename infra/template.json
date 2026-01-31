@@ -1,0 +1,43 @@
+Resources:
+  DailyHealthLogTableB6BE96E3:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: Date
+          AttributeType: S
+        - AttributeName: Period
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: Date
+          KeyType: HASH
+        - AttributeName: Period
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TableName: DailyHealthLog
+      Tags:
+        - Key: Application
+          Value: DailyCheckin
+        - Key: Environment
+          Value: local
+        - Key: ManagedBy
+          Value: CDK
+        - Key: Project
+          Value: daily-checkin
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Metadata:
+      aws:cdk:path: DailyCheckin-LocalStack/DailyHealthLogTable/Resource
+  CDKMetadata:
+    Type: AWS::CDK::Metadata
+    Properties:
+      Analytics: v2:deflate64:H4sIAAAAAAAA/32PwUrEMBCGn2XnuKRRu+KhN1l6EFFqWw+yLCVNZnfHTZOSpLuE0neXKN7E0/wMH/N/k/N888BvV+LqM6nOmaaez00Q8szE1XcqGjFY1fO5Fb3G3QyjcIECWfOMEYoZjBgQClgDgxDHFBtYGHjrwv9ET1qTOb5YlVbV40dXlXVXl2/vZdMCg9GSCU+mpQFrlPaCLjYjSjqQFKk/nf6DKU0SVVAEN+HCwOFgL0JXVpOMUIBCH5yNSSaBr79yy55tD+b7y4XV6O3kJO5gDfuFVTGcrLnZ8Luc368+PVHmJhNoQF7/zC+Nzt+LRwEAAA==
+    Metadata:
+      aws:cdk:path: DailyCheckin-LocalStack/CDKMetadata/Default
+Parameters:
+  BootstrapVersion:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /cdk-bootstrap/hnb659fds/version
+    Description: Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]
+

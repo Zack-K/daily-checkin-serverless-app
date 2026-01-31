@@ -3,9 +3,12 @@ import boto3
 import urllib.parse
 from datetime import datetime, timezone, timedelta
 import base64
+import os
 
 dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table('DailyHealthLog')
+# 環境変数からテーブル名を取得（CDK要件 3.4 に対応）
+table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'DailyHealthLog')
+table = dynamodb.Table(table_name)
 
 def lambda_handler(event, context):
     try:
