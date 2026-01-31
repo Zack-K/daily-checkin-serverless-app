@@ -58,7 +58,10 @@ class DailyCheckinStack(Stack):
         self.s3_bucket = self._create_static_website()
         self.cloudfront_distribution = self._create_cdn()
         
-        # 4. 出力値の設定
+        # 4. S3バケットデプロイメント（CloudFrontディストリビューション作成後）
+        self._deploy_static_assets()
+        
+        # 5. 出力値の設定
         self._create_outputs()
 
     def _apply_common_tags(self) -> None:
@@ -177,6 +180,7 @@ class DailyCheckinStack(Stack):
         既存のS3/index.htmlをCDKで管理
         
         要件 1.1: 既存のS3バケット設定と同等の静的ウェブサイトホスティング用バケットを作成
+        要件 1.2: 既存のS3/index.htmlファイルを新しいバケットにデプロイする機能を提供
         要件 1.3: ウェブサイトホスティングに適切なパブリック読み取り権限を設定（CloudFront経由のみ）
         要件 1.4: デプロイロールバック機能のためにバージョニングを有効
         要件 1.5: セキュリティベストプラクティスに従ってアクセス制御を設定
@@ -229,6 +233,24 @@ class DailyCheckinStack(Stack):
         )
         
         return distribution
+
+    def _deploy_static_assets(self) -> None:
+        """
+        既存のS3/index.htmlファイルをバケットにデプロイする機能
+        BucketDeploymentコンストラクトを使用してCloudFrontキャッシュ無効化も実行
+        
+        要件 1.2: 既存のS3/index.htmlファイルを新しいバケットにデプロイする機能を提供
+        """
+        # BucketDeploymentを使用して既存のS3/index.htmlをデプロイ
+        s3deploy.BucketDeployment(
+            self, "StaticWebsiteDeployment",
+            sources=[s3deploy.Source.asset("../S3")],  # S3ディレクトリ内のファイルをデプロイ
+            destination_bucket=self.s3_bucket,
+            distribution=self.cloudfront_distribution,  # CloudFrontキャッシュ無効化
+            distribution_paths=["/*"],  # すべてのパスでキャッシュ無効化
+            prune=True,  # 不要なファイルを削除
+            retain_on_delete=False if (self.is_local or self.env_name == "dev") else True  # 環境に応じた保持設定
+        )
 
     def _create_outputs(self) -> None:
         """
