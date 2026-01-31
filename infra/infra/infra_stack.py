@@ -18,8 +18,21 @@ from typing import Optional
 class DailyCheckinStack(Stack):
     """
     デイリーチェックインアプリケーション用のCDKスタック
-    既存の手動デプロイされたインフラをIaC化
-    Lambda関数の拡張を考慮したメソッド分割構成
+    
+    既存の手動デプロイされたサーバーレスインフラストラクチャをAWS CDKでIaC化します。
+    S3静的ウェブサイト、CloudFrontディストリビューション、Lambda関数、DynamoDBテーブルを
+    統合的に管理し、再現可能なデプロイメントを実現します。
+    
+    Attributes:
+        env_name (str): デプロイ環境名 (dev, staging, prod, local)
+        project_name (str): プロジェクト名
+        is_local (bool): LocalStack環境かどうかのフラグ
+        resource_prefix (str): リソース命名用のプレフィックス
+        dynamodb_table (dynamodb.Table): DynamoDBテーブルインスタンス
+        submit_function (_lambda.Function): フォーム送信用Lambda関数
+        s3_bucket (s3.Bucket): 静的ウェブサイト用S3バケット
+        cloudfront_distribution (cloudfront.Distribution): CDNディストリビューション
+        function_url (str): Lambda Function URLのエンドポイント
     """
 
     def __init__(
@@ -30,6 +43,20 @@ class DailyCheckinStack(Stack):
         project_name: str = "daily-checkin",
         **kwargs
     ) -> None:
+        """
+        DailyCheckinStackを初期化します。
+        
+        Args:
+            scope (Construct): CDKアプリケーションまたは親スタック
+            construct_id (str): スタックの一意識別子
+            environment (str, optional): デプロイ環境名. Defaults to "dev".
+            project_name (str, optional): プロジェクト名. Defaults to "daily-checkin".
+            **kwargs: 親クラスStackに渡される追加パラメータ
+            
+        Note:
+            environment="local"の場合、LocalStack用の設定が適用されます。
+            開発環境(dev, local)では、リソースの自動削除が有効になります。
+        """
         super().__init__(scope, construct_id, **kwargs)
 
         # 環境パラメータの設定
