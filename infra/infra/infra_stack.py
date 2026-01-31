@@ -18,8 +18,21 @@ from typing import Optional
 class DailyCheckinStack(Stack):
     """
     デイリーチェックインアプリケーション用のCDKスタック
-    既存の手動デプロイされたインフラをIaC化
-    Lambda関数の拡張を考慮したメソッド分割構成
+    
+    既存の手動デプロイされたサーバーレスインフラストラクチャをAWS CDKでIaC化します。
+    S3静的ウェブサイト、CloudFrontディストリビューション、Lambda関数、DynamoDBテーブルを
+    統合的に管理し、再現可能なデプロイメントを実現します。
+    
+    Attributes:
+        env_name (str): デプロイ環境名 (dev, staging, prod, local)
+        project_name (str): プロジェクト名
+        is_local (bool): LocalStack環境かどうかのフラグ
+        resource_prefix (str): リソース命名用のプレフィックス
+        dynamodb_table (dynamodb.Table): DynamoDBテーブルインスタンス
+        submit_function (_lambda.Function): フォーム送信用Lambda関数
+        s3_bucket (s3.Bucket): 静的ウェブサイト用S3バケット
+        cloudfront_distribution (cloudfront.Distribution): CDNディストリビューション
+        function_url (str): Lambda Function URLのエンドポイント
     """
 
     def __init__(
@@ -30,6 +43,20 @@ class DailyCheckinStack(Stack):
         project_name: str = "daily-checkin",
         **kwargs
     ) -> None:
+        """
+        DailyCheckinStackを初期化します。
+        
+        Args:
+            scope (Construct): CDKアプリケーションまたは親スタック
+            construct_id (str): スタックの一意識別子
+            environment (str, optional): デプロイ環境名. Defaults to "dev".
+            project_name (str, optional): プロジェクト名. Defaults to "daily-checkin".
+            **kwargs: 親クラスStackに渡される追加パラメータ
+            
+        Note:
+            environment="local"の場合、LocalStack用の設定が適用されます。
+            開発環境(dev, local)では、リソースの自動削除が有効になります。
+        """
         super().__init__(scope, construct_id, **kwargs)
 
         # 環境パラメータの設定
@@ -54,11 +81,14 @@ class DailyCheckinStack(Stack):
         # 2. Lambda関数群（機能別に整理）
         self.submit_function = self._create_submit_lambda()
         
-        # 3. フロントエンドリソース（次のPRで実装予定）
-        # self.s3_bucket = self._create_static_website()
-        # self.cloudfront_distribution = self._create_cdn()
+        # 3. フロントエンドリソース
+        self.s3_bucket = self._create_static_website()
+        self.cloudfront_distribution = self._create_cdn()
         
-        # 4. 出力値の設定
+        # 4. S3バケットデプロイメント（CloudFrontディストリビューション作成後）
+        self._deploy_static_assets()
+        
+        # 5. 出力値の設定
         self._create_outputs()
 
     def _apply_common_tags(self) -> None:
@@ -142,7 +172,7 @@ class DailyCheckinStack(Stack):
         既存のsubmit_daily_checkin.pyを使用
         
         要件 3.1: 既存のlamda/submit_daily_checkin.pyファイルを使用してLambda関数を作成
-        要件 3.2: 既存コードと互換性のあるPython 3.9以降のランタイムで設定
+        要件 3.2: 既存コードと互換性のあるPython 3.12ランタイムで設定
         要件 3.4: DynamoDBテーブル名用の環境変数を設定
         要件 3.5: 既存の処理要件に対応するために少なくとも30秒のタイムアウトを持つ
         """
@@ -153,7 +183,7 @@ class DailyCheckinStack(Stack):
         lambda_function = _lambda.Function(
             self, "SubmitCheckinFunction",
             function_name=f"{self.resource_prefix}-submit-checkin",
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             code=_lambda.Code.from_asset("../lamda"),  # 既存のlamdaディレクトリを使用
             handler="submit_daily_checkin.lambda_handler",
             timeout=Duration.seconds(30),
@@ -169,29 +199,171 @@ class DailyCheckinStack(Stack):
         # 要件 3.3, 6.2: DynamoDBテーブルへのアイテム書き込み権限のみを持つ
         self.dynamodb_table.grant_write_data(lambda_function)
         
+        # Lambda Function URLの作成
+        # 要件 4.1: 直接HTTPアクセス用のLambda Function URLを作成
+        # 要件 4.2: フロントエンドアプリケーションからのPOSTリクエストを受け入れる
+        # 要件 4.3: CloudFrontドメインからのリクエストを許可するCORSを設定
+        # 要件 4.4: パブリックアクセス用にNONE認証タイプを使用
+        
+        # 環境に応じたCORS設定
+        cors_origins = self._get_cors_origins()
+        
+        function_url = lambda_function.add_function_url(
+            auth_type=_lambda.FunctionUrlAuthType.NONE,
+            cors=_lambda.FunctionUrlCorsOptions(
+                allowed_origins=cors_origins,
+                allowed_methods=[_lambda.HttpMethod.POST],
+                allowed_headers=["Content-Type", "X-Requested-With"],
+                max_age=Duration.seconds(300)
+            )
+        )
+        
+        # Function URLを属性として保存（出力で使用）
+        self.function_url = function_url.url
+        
         return lambda_function
 
-    def _create_static_website(self) -> Optional[s3.Bucket]:
+    def _create_static_website(self) -> s3.Bucket:
         """
         静的ウェブサイト用S3バケット
+        既存のS3/index.htmlをCDKで管理
+        
+        要件 1.1: 既存のS3バケット設定と同等の静的ウェブサイトホスティング用バケットを作成
+        要件 1.2: 既存のS3/index.htmlファイルを新しいバケットにデプロイする機能を提供
+        要件 1.3: ウェブサイトホスティングに適切なパブリック読み取り権限を設定（CloudFront経由のみ）
+        要件 1.4: デプロイロールバック機能のためにバージョニングを有効
+        要件 1.5: セキュリティベストプラクティスに従ってアクセス制御を設定
         """
-        # TODO: 次のタスクで実装
-        return None
+        bucket = s3.Bucket(
+            self, "StaticWebsiteBucket",
+            bucket_name=f"{self.resource_prefix}-static-website",
+            versioned=True,  # 要件 1.4: バージョニング有効
+            public_read_access=False,  # 要件 1.3: CloudFront経由のみアクセス許可
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # 要件 1.5: セキュリティベストプラクティス - 全てブロック
+            removal_policy=self._get_removal_policy(),
+            auto_delete_objects=self.is_local or self.env_name == "dev"  # 開発環境では自動削除
+        )
+        
+        return bucket
 
-    def _create_cdn(self) -> Optional[cloudfront.Distribution]:
+    def _create_cdn(self) -> cloudfront.Distribution:
         """
         CloudFrontディストリビューション
+        S3バケットをオリジンとするCDN配信
+        
+        要件 2.1: S3バケットを指すCloudFrontディストリビューションを作成
+        要件 2.2: デフォルトでHTTPS有効でコンテンツを配信
+        要件 2.3: 適切なTTL設定で静的アセットをキャッシュ
+        要件 2.4: デフォルトルートオブジェクトを"index.html"として設定
         """
-        # TODO: 次のタスクで実装
-        return None
+        # Origin Access Identity (OAI) を作成してS3バケットへの安全なアクセスを提供
+        # 注意: 将来的にはOrigin Access Control (OAC)への移行を推奨
+        # OACはより強固なセキュリティを提供するが、現在のCDKバージョンでは未対応
+        oai = cloudfront.OriginAccessIdentity(
+            self, "WebsiteOAI",
+            comment=f"{self.resource_prefix} static website OAI"
+        )
+        
+        # S3バケットにOAIからの読み取り権限を付与
+        self.s3_bucket.grant_read(oai)
+        
+        # CloudFrontディストリビューションを作成
+        distribution = cloudfront.Distribution(
+            self, "WebsiteDistribution",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3Origin(
+                    self.s3_bucket, 
+                    origin_access_identity=oai
+                ),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,  # 要件 2.2: HTTPS強制
+                cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED  # 要件 2.3: 静的アセット用最適化キャッシュ
+            ),
+            default_root_object="index.html",  # 要件 2.4: デフォルトルートオブジェクト
+            comment=f"{self.resource_prefix} static website distribution",
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100  # コスト最適化のため最小価格クラス
+        )
+        
+        return distribution
+
+    def _deploy_static_assets(self) -> None:
+        """
+        既存のS3/index.htmlファイルをバケットにデプロイする機能
+        BucketDeploymentコンストラクトを使用してCloudFrontキャッシュ無効化も実行
+        
+        要件 1.2: 既存のS3/index.htmlファイルを新しいバケットにデプロイする機能を提供
+        """
+        # BucketDeploymentを使用して既存のS3/index.htmlをデプロイ
+        s3deploy.BucketDeployment(
+            self, "StaticWebsiteDeployment",
+            sources=[s3deploy.Source.asset("../S3")],  # S3ディレクトリ内のファイルをデプロイ
+            destination_bucket=self.s3_bucket,
+            distribution=self.cloudfront_distribution,  # CloudFrontキャッシュ無効化
+            distribution_paths=["/*"],  # すべてのパスでキャッシュ無効化
+            prune=True,  # 不要なファイルを削除
+            retain_on_delete=False if (self.is_local or self.env_name == "dev") else True  # 環境に応じた保持設定
+        )
 
     def _create_outputs(self) -> None:
         """
         重要なリソース識別子の出力
-        要件 7.5 に対応
+        要件 7.5: 重要なリソース識別子（CloudFront URL、Function URL）を出力
         """
-        # TODO: 次のタスクで実装
-        pass
+        # CloudFront URL の出力
+        CfnOutput(
+            self, "CloudFrontURL",
+            value=f"https://{self.cloudfront_distribution.distribution_domain_name}",
+            description="CloudFront distribution URL for static website",
+            export_name=f"{self.resource_prefix}-cloudfront-url"
+        )
+        
+        # Lambda Function URL の出力
+        CfnOutput(
+            self, "LambdaFunctionURL",
+            value=self.function_url,
+            description="Lambda Function URL for form submission",
+            export_name=f"{self.resource_prefix}-function-url"
+        )
+        
+        # S3バケット名の出力
+        CfnOutput(
+            self, "S3BucketName",
+            value=self.s3_bucket.bucket_name,
+            description="S3 bucket name for static website",
+            export_name=f"{self.resource_prefix}-s3-bucket"
+        )
+        
+        # DynamoDBテーブル名の出力
+        CfnOutput(
+            self, "DynamoDBTableName",
+            value=self.dynamodb_table.table_name,
+            description="DynamoDB table name for daily health logs",
+            export_name=f"{self.resource_prefix}-dynamodb-table"
+        )
+
+    def _get_cors_origins(self) -> list[str]:
+        """
+        環境に応じたCORS許可オリジンを返す
+        
+        Returns:
+            list[str]: 許可するオリジンのリスト
+            
+        Note:
+            - local/dev/test環境: 全てのオリジンを許可（開発用）
+            - staging/prod環境: 特定のドメインのみ許可（セキュリティ強化）
+        """
+        if self.is_local or self.env_name in ["dev", "test"]:
+            # 開発・テスト環境では全てのオリジンを許可
+            return ["*"]
+        elif self.env_name == "staging":
+            # ステージング環境では特定のドメインを許可
+            return [
+                "https://staging.daily-checkin.example.com"  # 実際のステージングドメインに置き換え
+            ]
+        else:  # prod環境
+            # 本番環境では本番ドメインのみ許可
+            return [
+                "https://daily-checkin.example.com"  # 実際の本番ドメインに置き換え
+            ]
 
     def _get_removal_policy(self) -> RemovalPolicy:
         """
