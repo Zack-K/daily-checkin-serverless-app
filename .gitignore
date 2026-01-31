@@ -54,3 +54,19 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# LocalStack - Exclude all generated files and cache
+infra/volume/
+!infra/volume/.gitkeep
+
+# AWS CDK
+infra/cdk.out/
+infra/.cdk.staging/
+
+# Security - Never commit private keys or certificates
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+machine.json

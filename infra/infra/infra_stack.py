@@ -54,9 +54,9 @@ class DailyCheckinStack(Stack):
         # 2. Lambda関数群（機能別に整理）
         self.submit_function = self._create_submit_lambda()
         
-        # 3. フロントエンドリソース
-        self.s3_bucket = self._create_static_website()
-        self.cloudfront_distribution = self._create_cdn()
+        # 3. フロントエンドリソース（次のPRで実装予定）
+        # self.s3_bucket = self._create_static_website()
+        # self.cloudfront_distribution = self._create_cdn()
         
         # 4. 出力値の設定
         self._create_outputs()
@@ -171,19 +171,19 @@ class DailyCheckinStack(Stack):
         
         return lambda_function
 
-    def _create_static_website(self) -> s3.Bucket:
+    def _create_static_website(self) -> Optional[s3.Bucket]:
         """
         静的ウェブサイト用S3バケット
         """
         # TODO: 次のタスクで実装
-        pass
+        return None
 
-    def _create_cdn(self) -> cloudfront.Distribution:
+    def _create_cdn(self) -> Optional[cloudfront.Distribution]:
         """
         CloudFrontディストリビューション
         """
         # TODO: 次のタスクで実装
-        pass
+        return None
 
     def _create_outputs(self) -> None:
         """

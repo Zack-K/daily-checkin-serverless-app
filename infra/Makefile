@@ -1,6 +1,6 @@
 # Daily Checkin CDK Infrastructure Makefile
 
-.PHONY: help install localstack-start localstack-stop deploy-local deploy-dev test clean
+.PHONY: help install localstack-start localstack-stop deploy-local deploy-dev test test-local clean setup-dev
 
 # デフォルトターゲット
 help:
