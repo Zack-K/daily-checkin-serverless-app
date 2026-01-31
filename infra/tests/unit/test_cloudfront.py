@@ -12,7 +12,9 @@ def test_cloudfront_distribution_created():
     template.resource_count_is("AWS::CloudFront::Distribution", 1)
 
 def test_cloudfront_https_redirect():
-    """HTTPS強制リダイレクトが設定されていることをテスト"""
+    """
+    Verifies the CloudFront Distribution enforces HTTPS by using the `redirect-to-https` viewer protocol policy.
+    """
     app = core.App()
     stack = DailyCheckinStack(app, "test-stack", environment="test")
     template = assertions.Template.from_stack(stack)
@@ -27,7 +29,12 @@ def test_cloudfront_https_redirect():
     })
 
 def test_cloudfront_default_root_object():
-    """デフォルトルートオブジェクトがindex.htmlに設定されていることをテスト"""
+    """
+    Check that the CloudFront distribution's default root object is set to "index.html".
+    
+    Asserts that the synthesized CloudFormation template contains an AWS::CloudFront::Distribution
+    resource whose DistributionConfig.DefaultRootObject equals "index.html".
+    """
     app = core.App()
     stack = DailyCheckinStack(app, "test-stack", environment="test")
     template = assertions.Template.from_stack(stack)
@@ -40,7 +47,11 @@ def test_cloudfront_default_root_object():
     })
 
 def test_origin_access_identity_created():
-    """Origin Access Identityが作成されることをテスト"""
+    """
+    Verifies that a CloudFront Origin Access Identity resource is created in the synthesized CloudFormation template.
+    
+    Asserts that exactly one AWS::CloudFront::CloudFrontOriginAccessIdentity resource is present in the stack.
+    """
     app = core.App()
     stack = DailyCheckinStack(app, "test-stack", environment="test")
     template = assertions.Template.from_stack(stack)

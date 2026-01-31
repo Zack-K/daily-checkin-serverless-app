@@ -39,7 +39,11 @@ def test_dynamodb_table_created():
     })
 
 def test_stack_creation():
-    """Test basic stack creation"""
+    """
+    Create a DailyCheckinStack in a CDK App and synthesize its CloudFormation template to confirm the stack can be instantiated.
+    
+    Asserts that synthesizing the stack yields a template object, indicating no errors occurred during stack creation.
+    """
     app = core.App()
     stack = DailyCheckinStack(app, "test-stack")
     template = assertions.Template.from_stack(stack)
@@ -90,7 +94,11 @@ def test_lambda_function_url_created():
     })
 
 def test_cdk_outputs_created():
-    """Test that CDK outputs are created"""
+    """
+    Verify the stack defines the CloudFront, Lambda function URL, S3 bucket name, and DynamoDB table name outputs.
+    
+    Asserts that the synthesized template contains outputs named "CloudFrontURL", "LambdaFunctionURL", "S3BucketName", and "DynamoDBTableName".
+    """
     app = core.App()
     stack = DailyCheckinStack(app, "test-stack", environment="test")
     template = assertions.Template.from_stack(stack)

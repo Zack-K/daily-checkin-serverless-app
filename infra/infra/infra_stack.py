@@ -30,6 +30,18 @@ class DailyCheckinStack(Stack):
         project_name: str = "daily-checkin",
         **kwargs
     ) -> None:
+        """
+        Initialize the DailyCheckin CDK stack, configure environment-specific behavior, and provision all stack resources.
+        
+        Creates and stores environment metadata (env_name, project_name, is_local, resource_prefix), applies common tags, optionally configures LocalStack, and constructs the stack resources in order: DynamoDB table, submit Lambda (with Function URL), S3 static website, CloudFront distribution, deploys static assets, and publishes CloudFormation outputs. Side effects: sets attributes such as dynamodb_table, submit_function, s3_bucket, cloudfront_distribution, and function_url on the stack instance.
+        
+        Parameters:
+            scope (Construct): The parent construct.
+            construct_id (str): Logical identifier for this stack.
+            environment (str): Deployment environment name (e.g., "dev", "prod", "local"); controls removal policy and local behavior.
+            project_name (str): Project name prefix used to build resource names.
+            **kwargs: Additional keyword arguments forwarded to the base Stack constructor.
+        """
         super().__init__(scope, construct_id, **kwargs)
 
         # 環境パラメータの設定
@@ -66,8 +78,13 @@ class DailyCheckinStack(Stack):
 
     def _apply_common_tags(self) -> None:
         """
-        すべてのリソースに環境とプロジェクト識別子でタグ付け
-        要件 7.3 に対応
+        Apply standard tags to all resources in the stack.
+        
+        Adds these tags to every resource:
+        - Environment: the stack environment name
+        - Project: the project name
+        - ManagedBy: "CDK"
+        - Application: "DailyCheckin"
         """
         Tags.of(self).add("Environment", self.env_name)
         Tags.of(self).add("Project", self.project_name)
@@ -141,13 +158,12 @@ class DailyCheckinStack(Stack):
 
     def _create_submit_lambda(self) -> _lambda.Function:
         """
-        フォーム送信処理用Lambda関数
-        既存のsubmit_daily_checkin.pyを使用
+        Create and configure the Lambda function that handles form submissions for the application.
         
-        要件 3.1: 既存のlamda/submit_daily_checkin.pyファイルを使用してLambda関数を作成
-        要件 3.2: 既存コードと互換性のあるPython 3.9以降のランタイムで設定
-        要件 3.4: DynamoDBテーブル名用の環境変数を設定
-        要件 3.5: 既存の処理要件に対応するために少なくとも30秒のタイムアウトを持つ
+        The function is built from the existing lamda/submit_daily_checkin code, configured to run on Python 3.9 with a 30-second timeout, and receives the DynamoDB table name via the `DYNAMODB_TABLE_NAME` environment variable. This method also grants the function write access to the stack's DynamoDB table and stores the created Lambda Function URL on `self.function_url`.
+        
+        Returns:
+            _lambda.Function: The created Lambda function resource.
         """
         # Lambda関数用のカスタムIAMロールを作成
         # 要件 6.1: 最小限の必要な権限を持つIAMロールを持つ
@@ -194,14 +210,12 @@ class DailyCheckinStack(Stack):
 
     def _create_static_website(self) -> s3.Bucket:
         """
-        静的ウェブサイト用S3バケット
-        既存のS3/index.htmlをCDKで管理
+        Create an S3 bucket configured to host the application's static website and to be accessed via CloudFront only.
         
-        要件 1.1: 既存のS3バケット設定と同等の静的ウェブサイトホスティング用バケットを作成
-        要件 1.2: 既存のS3/index.htmlファイルを新しいバケットにデプロイする機能を提供
-        要件 1.3: ウェブサイトホスティングに適切なパブリック読み取り権限を設定（CloudFront経由のみ）
-        要件 1.4: デプロイロールバック機能のためにバージョニングを有効
-        要件 1.5: セキュリティベストプラクティスに従ってアクセス制御を設定
+        The bucket is created with versioning enabled, public read disabled, ACLs blocked, environment-aware removal policy, and auto-delete-of-objects enabled for local or dev environments.
+        
+        Returns:
+            s3.Bucket: The created S3 bucket resource.
         """
         bucket = s3.Bucket(
             self, "StaticWebsiteBucket",
@@ -217,13 +231,12 @@ class DailyCheckinStack(Stack):
 
     def _create_cdn(self) -> cloudfront.Distribution:
         """
-        CloudFrontディストリビューション
-        S3バケットをオリジンとするCDN配信
+        Create a CloudFront distribution that serves the static website from the stack's S3 bucket.
         
-        要件 2.1: S3バケットを指すCloudFrontディストリビューションを作成
-        要件 2.2: デフォルトでHTTPS有効でコンテンツを配信
-        要件 2.3: 適切なTTL設定で静的アセットをキャッシュ
-        要件 2.4: デフォルトルートオブジェクトを"index.html"として設定
+        The distribution is configured with an Origin Access Identity to restrict direct S3 access, redirects HTTP requests to HTTPS, uses an optimized cache policy for static assets, and sets "index.html" as the default root object.
+        
+        Returns:
+            cloudfront.Distribution: The created CloudFront distribution.
         """
         # Origin Access Identity (OAI) を作成してS3バケットへの安全なアクセスを提供
         oai = cloudfront.OriginAccessIdentity(
@@ -254,10 +267,9 @@ class DailyCheckinStack(Stack):
 
     def _deploy_static_assets(self) -> None:
         """
-        既存のS3/index.htmlファイルをバケットにデプロイする機能
-        BucketDeploymentコンストラクトを使用してCloudFrontキャッシュ無効化も実行
+        Deploy static website files from the local ../S3 directory to the stack's S3 bucket and invalidate the CloudFront cache.
         
-        要件 1.2: 既存のS3/index.htmlファイルを新しいバケットにデプロイする機能を提供
+        Uses a BucketDeployment to upload files from ../S3, invalidate all CloudFront paths (/*), prune files that are no longer present, and set bucket object retention on deletion depending on whether the stack is local or in the dev environment.
         """
         # BucketDeploymentを使用して既存のS3/index.htmlをデプロイ
         s3deploy.BucketDeployment(
@@ -272,8 +284,13 @@ class DailyCheckinStack(Stack):
 
     def _create_outputs(self) -> None:
         """
-        重要なリソース識別子の出力
-        要件 7.5: 重要なリソース識別子（CloudFront URL、Function URL）を出力
+        Create CloudFormation outputs for the stack's primary resource identifiers.
+        
+        Adds outputs for:
+        - CloudFrontURL: HTTPS URL of the CloudFront distribution.
+        - LambdaFunctionURL: Function URL for the submit Lambda.
+        - S3BucketName: name of the static website S3 bucket.
+        - DynamoDBTableName: name of the DynamoDB table storing daily health logs.
         """
         # CloudFront URL の出力
         CfnOutput(
@@ -309,8 +326,10 @@ class DailyCheckinStack(Stack):
 
     def _get_removal_policy(self) -> RemovalPolicy:
         """
-        環境に応じた削除ポリシーを返す
-        ローカル環境では削除を許可、本番環境では保持
+        Selects the CloudFormation removal policy based on the deployment environment.
+        
+        Returns:
+            RemovalPolicy: `RemovalPolicy.DESTROY` when running locally or when `env_name` is "dev", `RemovalPolicy.RETAIN` otherwise.
         """
         if self.is_local or self.env_name == "dev":
             return RemovalPolicy.DESTROY
