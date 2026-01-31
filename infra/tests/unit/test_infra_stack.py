@@ -6,7 +6,7 @@ from infra.infra_stack import DailyCheckinStack
 def test_dynamodb_table_created():
     """Test that DynamoDB table is created with correct configuration"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # Test DynamoDB table creation with correct properties
@@ -50,7 +50,7 @@ def test_stack_creation():
 def test_s3_bucket_deployment_created():
     """Test that S3 bucket deployment is created with correct configuration"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # Test that BucketDeployment resource is created
@@ -60,7 +60,7 @@ def test_s3_bucket_deployment_created():
 def test_s3_bucket_created():
     """Test that S3 bucket is created with correct configuration"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # Test S3 bucket creation with versioning enabled
@@ -74,7 +74,7 @@ def test_s3_bucket_created():
 def test_lambda_function_url_created():
     """Test that Lambda Function URL is created with correct configuration"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # Test Lambda Function URL creation
@@ -92,7 +92,7 @@ def test_lambda_function_url_created():
 def test_cdk_outputs_created():
     """Test that CDK outputs are created"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # Test that outputs are created
@@ -105,7 +105,7 @@ def test_cdk_outputs_created():
 def test_lambda_function_created():
     """Test that Lambda function is created with correct configuration"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # Test Lambda function creation (BucketDeploymentも1つのLambda関数を作成するため、合計2つ)
@@ -121,7 +121,7 @@ def test_lambda_function_created():
 def test_iam_role_created():
     """Test that IAM role is created with correct permissions"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # Test IAM role creation (BucketDeploymentも1つのIAMロールを作成するため、合計2つ)
@@ -145,15 +145,15 @@ def test_environment_specific_configuration():
     """Test environment-specific configuration"""
     # 各環境で別々のAppを作成してsynthesis問題を回避
     local_app = core.App()
-    local_stack = DailyCheckinStack(local_app, "local-stack", environment="local")
+    local_stack = DailyCheckinStack(local_app, "local-stack", environment="local", project_name="test-project")
     local_template = assertions.Template.from_stack(local_stack)
     
     dev_app = core.App()
-    dev_stack = DailyCheckinStack(dev_app, "dev-stack", environment="dev")
+    dev_stack = DailyCheckinStack(dev_app, "dev-stack", environment="dev", project_name="test-project")
     dev_template = assertions.Template.from_stack(dev_stack)
     
     prod_app = core.App()
-    prod_stack = DailyCheckinStack(prod_app, "prod-stack", environment="prod")
+    prod_stack = DailyCheckinStack(prod_app, "prod-stack", environment="prod", project_name="test-project")
     prod_template = assertions.Template.from_stack(prod_stack)
     
     # Verify that stacks can be created for different environments
@@ -189,7 +189,7 @@ def test_tags_applied():
 def test_s3_bucket_security_configuration():
     """Test S3 bucket security configuration"""
     app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="test")
+    stack = DailyCheckinStack(app, "test-stack", environment="test", project_name="test-project")
     template = assertions.Template.from_stack(stack)
 
     # Test S3 bucket security settings - 全4つのパブリックアクセスブロック設定をテスト
@@ -207,7 +207,7 @@ def test_cors_configuration_environment_aware():
     """Test that CORS configuration is environment-aware"""
     # Test development environment (allows all origins)
     dev_app = core.App()
-    dev_stack = DailyCheckinStack(dev_app, "dev-stack", environment="dev")
+    dev_stack = DailyCheckinStack(dev_app, "dev-stack", environment="dev", project_name="test-project")
     dev_template = assertions.Template.from_stack(dev_stack)
     
     dev_template.has_resource_properties("AWS::Lambda::Url", {
@@ -218,7 +218,7 @@ def test_cors_configuration_environment_aware():
     
     # Test production environment (restricted origins)
     prod_app = core.App()
-    prod_stack = DailyCheckinStack(prod_app, "prod-stack", environment="prod")
+    prod_stack = DailyCheckinStack(prod_app, "prod-stack", environment="prod", project_name="test-project")
     prod_template = assertions.Template.from_stack(prod_stack)
     
     prod_template.has_resource_properties("AWS::Lambda::Url", {
@@ -267,31 +267,29 @@ def test_lambda_versioning_development_environment():
     # 開発環境ではエイリアスが作成されないことを確認
     template.resource_count_is("AWS::Lambda::Alias", 0)
 
-def test_lambda_alias_configuration_details():
-    """Lambda関数エイリアスの詳細設定をテスト"""
+
+def test_lambda_versioning_comprehensive():
+    """Lambda関数バージョニングの包括的テスト - エイリアス設定、出力、統合を統合"""
     app = core.App()
     stack = DailyCheckinStack(app, "test-stack", environment="prod", project_name="test-project")
     template = assertions.Template.from_stack(stack)
     
-    # エイリアスが正しいLambda関数を参照していることを確認
+    # Lambda関数のエイリアスが作成されることを確認
+    template.resource_count_is("AWS::Lambda::Alias", 2)
+    
+    # LIVE エイリアスの設定を確認
     template.has_resource_properties("AWS::Lambda::Alias", {
         "Name": "LIVE",
         "Description": "本番環境用のLambda関数エイリアス"
     })
     
+    # STAGING エイリアスの設定を確認
     template.has_resource_properties("AWS::Lambda::Alias", {
-        "Name": "STAGING",
+        "Name": "STAGING", 
         "Description": "ステージング環境用のLambda関数エイリアス"
     })
-
-
-def test_lambda_versioning_outputs():
-    """Lambda関数バージョニングの出力をテスト"""
-    app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="prod", project_name="test-project")
-    template = assertions.Template.from_stack(stack)
     
-    # エイリアスARNの出力が正しく設定されていることを確認
+    # エイリアスARNの出力を確認
     template.has_output("LambdaLiveAliasArn", {
         "Description": "Lambda function LIVE alias ARN",
         "Export": {
@@ -300,18 +298,22 @@ def test_lambda_versioning_outputs():
     })
     
     template.has_output("LambdaStagingAliasArn", {
-        "Description": "Lambda function STAGING alias ARN", 
+        "Description": "Lambda function STAGING alias ARN",
         "Export": {
             "Name": "test-project-prod-lambda-staging-alias-arn"
         }
     })
+    
+    # Lambda関数とバージョニングの統合確認
+    template.resource_count_is("AWS::Lambda::Function", 2)  # バージョニングにより複数作成
+    template.resource_count_is("AWS::Lambda::Url", 1)       # Function URL
 
 
 def test_environment_specific_versioning_behavior():
-    """環境固有のバージョニング動作をテスト"""
+    """環境固有のバージョニング動作をテスト - 全環境での動作確認"""
     # ローカル環境でのテスト
     local_app = core.App()
-    local_stack = DailyCheckinStack(local_app, "local-stack", environment="local")
+    local_stack = DailyCheckinStack(local_app, "local-stack", environment="local", project_name="test-project")
     local_template = assertions.Template.from_stack(local_stack)
     
     # ローカル環境ではエイリアスが作成されないことを確認
@@ -319,24 +321,8 @@ def test_environment_specific_versioning_behavior():
     
     # ステージング環境でのテスト
     staging_app = core.App()
-    staging_stack = DailyCheckinStack(staging_app, "staging-stack", environment="staging")
+    staging_stack = DailyCheckinStack(staging_app, "staging-stack", environment="staging", project_name="test-project")
     staging_template = assertions.Template.from_stack(staging_stack)
     
     # ステージング環境ではエイリアスが作成されることを確認
     staging_template.resource_count_is("AWS::Lambda::Alias", 2)
-
-
-def test_lambda_function_integration_with_versioning():
-    """Lambda関数とバージョニングの統合をテスト"""
-    app = core.App()
-    stack = DailyCheckinStack(app, "test-stack", environment="prod")
-    template = assertions.Template.from_stack(stack)
-    
-    # Lambda関数が作成されていることを確認（バージョニングにより複数のリソースが作成される可能性がある）
-    template.resource_count_is("AWS::Lambda::Function", 2)
-    
-    # Lambda関数にバージョニングが適用されていることを確認（エイリアス経由）
-    template.resource_count_is("AWS::Lambda::Alias", 2)
-    
-    # Function URLが正しく設定されていることを確認
-    template.resource_count_is("AWS::Lambda::Url", 1)
