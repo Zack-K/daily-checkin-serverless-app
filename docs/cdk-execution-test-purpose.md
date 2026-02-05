@@ -52,7 +52,7 @@
 4. **CloudFront**
    - ディストリビューション作成
    - HTTPS強制とキャッシュ設定
-   - Origin Access Identity設定
+   - Origin Access Control（OAC）設定
 
 5. **IAM権限**
    - Lambda実行ロール作成
