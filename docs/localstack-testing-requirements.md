@@ -246,7 +246,7 @@ curl -X POST \
 - [AWS CDK LocalStack統合](https://docs.localstack.cloud/user-guide/integrations/aws-cdk/)
 - [LocalStack Community Edition制限](https://docs.localstack.cloud/getting-started/installation/#localstack-editions)
 
-## テスト実行結果（2024-02-05実施）
+## テスト実行結果（2026-02-05実施）
 
 ### 実行環境
 - **LocalStack**: 3.8.1 Community Edition
