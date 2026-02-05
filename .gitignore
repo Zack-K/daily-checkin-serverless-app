@@ -30,8 +30,30 @@ ENV/
 env.bak/
 venv.bak/
 
+# Environment variables
+.env*
+!.env.example
+
 # Python環境管理
 .python-version
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Linting and formatting
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
 # IDE
 .vscode/
@@ -50,6 +72,7 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 
 # Temporary files
 *.tmp
@@ -62,6 +85,15 @@ infra/volume/
 # AWS CDK
 infra/cdk.out/
 infra/.cdk.staging/
+cdk.context.json
+*.assets.json
+*.template.json
+
+# AWS credentials and config (never commit these!)
+.aws/
+aws-credentials
+credentials
+config
 
 # Security - Never commit private keys or certificates
 *.key
@@ -70,3 +102,8 @@ infra/.cdk.staging/
 *.p12
 *.pfx
 machine.json
+
+# Test files and temporary artifacts
+lambda-function.zip
+*.zip
+test-*.json
