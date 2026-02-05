@@ -2,7 +2,9 @@
 
 ## 概要
 
-この設計書は、既存のサーバーレスデイリーチェックインアプリケーションをAWS CDKでIaC化するための詳細な設計を定義します。現在手動でデプロイされているインフラストラクチャ（S3静的サイト、Lambda関数、DynamoDB）をCDKコードで管理可能にし、再現可能で保守性の高いデプロイメントを実現します。
+この設計書は、既存のサーバーレスデイリーチェックインアプリケーションをAWS CDKでIaC化するための詳細な設計を定義します。現在手動でデプロイされているインフラストラクチャ（S3静的サイト、Lambda関数、DynamoDB）をCDKコードで管理可能にし、個人学習プロジェクトとして最適化された実装を実現します。
+
+本設計は学習効果を最大化するため、AWS公式のベストプラクティスを採用しつつ、理解しやすさと実装可能性のバランスを重視しています。
 
 ## アーキテクチャ
 
@@ -58,74 +60,91 @@ class DailyCheckinStack(Stack):
         # IAMロールとポリシー
 ```
 
-### 2. S3静的ウェブサイトコンポーネント
+### 2. S3静的ウェブサイトコンポーネント（セキュリティ強化）
 
-**目的**: 既存のS3/index.htmlをCDKで管理
+**目的**: 既存のS3/index.htmlをCDKで管理し、セキュリティベストプラクティスを適用
 
 **設計仕様**:
-- バケット名: `daily-checkin-static-{環境}`
-- ウェブサイトホスティング有効
-- パブリック読み取りアクセス（CloudFront経由のみ）
+- バケット名: CDK生成名（Generated Names使用）
+- パブリックアクセスブロック: 全て有効
+- CloudFrontからのアクセスのみ許可（OAC使用）
 - バージョニング有効（ロールバック対応）
+- 保存時暗号化有効（AES-256）
 
 ```python
-# S3バケット設定
+# S3バケット設定（学習重点：セキュリティ設定）
 bucket = s3.Bucket(
     self, "StaticWebsiteBucket",
-    bucket_name=f"daily-checkin-static-{environment}",
-    website_index_document="index.html",
+    # 物理名指定なし（Generated Names）
     versioned=True,
-    public_read_access=False,  # CloudFront経由のみ
-    block_public_access=s3.BlockPublicAccess.BLOCK_ACLS
+    encryption=s3.BucketEncryption.S3_MANAGED,
+    block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+    enforce_ssl=True
 )
 ```
 
-### 3. CloudFrontディストリビューションコンポーネント
+### 3. CloudFrontディストリビューションコンポーネント（OAC対応）
 
-**目的**: 既存のCloudFront設定をCDKで再現
+**目的**: 既存のCloudFront設定をCDKで再現し、最新のセキュリティ機能を適用
 
 **設計仕様**:
 - オリジン: S3バケット
-- デフォルトルートオブジェクト: index.html
+- Origin Access Control（OAC）使用（OAIの後継）
 - HTTPS強制リダイレクト
+- セキュリティヘッダー設定
 - キャッシュ設定: 静的アセット用最適化
-- OAI（Origin Access Identity）使用
 
 ```python
+# Origin Access Control（学習重点：最新セキュリティ機能）
+oac = cloudfront.OriginAccessControl(
+    self, "OAC",
+    origin_access_control_origin_type=cloudfront.OriginAccessControlOriginType.S3,
+    signing=cloudfront.Signing.SIGV4_ALWAYS
+)
+
 # CloudFrontディストリビューション
 distribution = cloudfront.Distribution(
     self, "WebsiteDistribution",
     default_behavior=cloudfront.BehaviorOptions(
-        origin=origins.S3Origin(bucket, origin_access_identity=oai),
+        origin=origins.S3Origin(bucket, origin_access_control=oac),
         viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED
+        cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        response_headers_policy=cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS
     ),
     default_root_object="index.html"
 )
 ```
 
-### 4. Lambda関数コンポーネント
+### 4. Lambda関数コンポーネント（パフォーマンス最適化）
 
-**目的**: 既存のlamda/submit_daily_checkin.pyをCDKでデプロイ
+**目的**: 既存のlamda/submit_daily_checkin.pyをCDKでデプロイし、学習重点の設定を適用
 
 **設計仕様**:
-- ランタイム: Python 3.9
+- ランタイム: Python 3.12（最新安定版）
 - ソースコード: 既存ファイル使用
+- メモリ: 256MB（200ms以内レスポンス目標）
 - タイムアウト: 30秒
-- メモリ: 128MB（最小構成）
-- 環境変数: DynamoDBテーブル名
+- 環境変数: DynamoDBテーブル名（Generated Name）
+- デッドレターキュー: 基本設定
 
 ```python
+# デッドレターキュー（学習重点：エラーハンドリング）
+dlq = sqs.Queue(
+    self, "SubmitCheckinDLQ",
+    retention_period=Duration.days(14)
+)
+
 # Lambda関数
 lambda_function = _lambda.Function(
     self, "SubmitCheckinFunction",
-    runtime=_lambda.Runtime.PYTHON_3_9,
-    code=_lambda.Code.from_asset("lamda"),  # 既存ディレクトリ
+    runtime=_lambda.Runtime.PYTHON_3_12,
+    code=_lambda.Code.from_asset("lamda"),
     handler="submit_daily_checkin.lambda_handler",
     timeout=Duration.seconds(30),
-    memory_size=128,
+    memory_size=256,  # パフォーマンス最適化
+    dead_letter_queue=dlq,
     environment={
-        "DYNAMODB_TABLE_NAME": dynamodb_table.table_name
+        "DYNAMODB_TABLE_NAME": dynamodb_table.table_name  # Generated Name使用
     }
 )
 ```
@@ -152,22 +171,23 @@ function_url = lambda_function.add_function_url(
 )
 ```
 
-### 6. DynamoDBテーブルコンポーネント
+### 6. DynamoDBテーブルコンポーネント（セキュリティ強化）
 
-**目的**: 既存のDailyHealthLogテーブルをCDKで管理
+**目的**: 既存のDailyHealthLogテーブルをCDKで管理し、データ保護を強化
 
 **設計仕様**:
-- テーブル名: DailyHealthLog
+- テーブル名: CDK生成名（Generated Names使用）
 - パーティションキー: Date (String)
 - ソートキー: Period (String)
-- 課金モード: オンデマンド
+- 課金モード: オンデマンド（学習環境でのコスト最適化）
 - ポイントインタイムリカバリ: 有効
+- 保存時暗号化: AWS管理キー
 
 ```python
-# DynamoDBテーブル
+# DynamoDBテーブル（学習重点：セキュリティとコスト最適化）
 dynamodb_table = dynamodb.Table(
     self, "DailyHealthLogTable",
-    table_name="DailyHealthLog",
+    # 物理名指定なし（Generated Names）
     partition_key=dynamodb.Attribute(
         name="Date",
         type=dynamodb.AttributeType.STRING
@@ -177,7 +197,8 @@ dynamodb_table = dynamodb.Table(
         type=dynamodb.AttributeType.STRING
     ),
     billing_mode=dynamodb.BillingMode.ON_DEMAND,
-    point_in_time_recovery=True
+    point_in_time_recovery=True,
+    encryption=dynamodb.TableEncryption.AWS_MANAGED
 )
 ```
 
@@ -217,51 +238,35 @@ dynamodb_table = dynamodb.Table(
 3. **データ処理** → Lambda関数 → DynamoDB書き込み
 4. **レスポンス** → HTML断片 → HTMX DOM更新
 
-## 正確性プロパティ
+## 正確性プロパティ（学習重点）
 
-*プロパティとは、システムのすべての有効な実行において真であるべき特性や動作のことです。プロパティは、人間が読める仕様と機械で検証可能な正確性保証の橋渡しとなります。*
+*プロパティとは、システムのすべての有効な実行において真であるべき特性や動作のことです。個人学習プロジェクトでは、理解しやすく検証可能なプロパティに焦点を当てます。*
 
-### プロパティ分析の前作業
+### CDKインフラストラクチャ学習重点プロパティ
 
-受入基準テスト前作業を実施します：
+#### プロパティ1: S3バケットセキュリティ設定の正確性
+*すべての*CDKデプロイメントにおいて、作成されるS3バケットはパブリックアクセスブロックが有効で、暗号化が有効で、バージョニングが有効であるべきである
+**検証対象: 要件 1.3, 1.4, 1.5, 1.6**
 
-### CDKインフラストラクチャ正確性プロパティ
-
-#### プロパティ1: S3バケット設定の正確性
-*すべての*CDKデプロイメントにおいて、作成されるS3バケットはウェブサイトホスティングが有効で、バージョニングが有効で、適切な読み取り権限を持つべきである
-**検証対象: 要件 1.1, 1.2, 1.3, 1.4**
-
-#### プロパティ2: CloudFrontディストリビューション設定の正確性
-*すべての*CDKデプロイメントにおいて、作成されるCloudFrontディストリビューションはS3バケットをオリジンとし、HTTPS強制、適切なキャッシュ設定、index.htmlをデフォルトルートオブジェクトとして持つべきである
-**検証対象: 要件 2.1, 2.2, 2.3, 2.4**
+#### プロパティ2: CloudFrontセキュリティ設定の正確性
+*すべての*CDKデプロイメントにおいて、作成されるCloudFrontディストリビューションはHTTPS強制、OAC使用、セキュリティヘッダー設定を持つべきである
+**検証対象: 要件 2.2, 2.3, 2.5**
 
 #### プロパティ3: Lambda関数設定の正確性
-*すべての*CDKデプロイメントにおいて、作成されるLambda関数は指定されたソースコード、Python 3.9以降のランタイム、適切なIAM権限、DynamoDBテーブル名の環境変数、30秒以上のタイムアウトを持つべきである
-**検証対象: 要件 3.1, 3.2, 3.3, 3.4, 3.5**
+*すべての*CDKデプロイメントにおいて、作成されるLambda関数は最新Pythonランタイム、適切なメモリ設定、DLQ設定、環境変数を持つべきである
+**検証対象: 要件 3.2, 3.5, 3.6, 3.4**
 
-#### プロパティ4: Function URL設定の正確性
-*すべての*CDKデプロイメントにおいて、作成されるFunction URLはPOSTリクエストを受け入れ、適切なCORS設定、NONE認証タイプを持つべきである
-**検証対象: 要件 4.1, 4.2, 4.3, 4.4**
+#### プロパティ4: DynamoDBセキュリティ設定の正確性
+*すべての*CDKデプロイメントにおいて、作成されるDynamoDBテーブルは暗号化有効、PITR有効、適切なキー設定を持つべきである
+**検証対象: 要件 5.5, 5.6, 5.2, 5.3**
 
-#### プロパティ5: DynamoDBテーブル設定の正確性
-*すべての*CDKデプロイメントにおいて、作成されるDynamoDBテーブルは"DailyHealthLog"という名前で、"Date"パーティションキー、"Period"ソートキー、オンデマンド課金モード、ポイントインタイムリカバリ有効を持つべきである
-**検証対象: 要件 5.1, 5.2, 5.3, 5.4, 5.5**
+#### プロパティ5: IAM最小権限の正確性
+*すべての*CDKデプロイメントにおいて、Lambda関数は必要最小限のIAM権限のみを持ち、cdk-nag検証に合格するべきである
+**検証対象: 要件 6.1, 6.2, 6.5, 6.6**
 
-#### プロパティ6: IAMセキュリティ設定の正確性
-*すべての*CDKデプロイメントにおいて、Lambda関数は最小権限のIAMロール、DynamoDB書き込み権限のみ、CloudWatchログ権限を持ち、S3バケットはCloudFrontアクセスのみを許可するポリシーを持つべきである
-**検証対象: 要件 6.1, 6.2, 6.3, 6.4**
-
-#### プロパティ7: 環境設定とタグ付けの正確性
-*すべての*CDKデプロイメントにおいて、リソースは環境パラメータに基づく一貫した命名規則、適切なタグ付け、必要な出力値を持つべきである
-**検証対象: 要件 7.1, 7.2, 7.3, 7.5**
-
-#### プロパティ8: エンドツーエンド統合の正確性
-*すべての*有効なフォームデータにおいて、CloudFront URL経由でのPOSTリクエストはLambda関数を正しく呼び出し、DynamoDBにデータを保存し、適切なHTMLレスポンスを返すべきである
-**検証対象: 要件 2.5, 4.5**
-
-#### プロパティ9: Lambda関数バージョニングの正確性
-*すべての*CDKデプロイメントにおいて、Lambda関数はロールバック機能のためにバージョニングをサポートするべきである
-**検証対象: 要件 8.3**
+#### プロパティ6: Generated Names使用の正確性
+*すべての*CDKデプロイメントにおいて、リソースはCDK生成名を使用し、適切なタグ付けを持つべきである
+**検証対象: 要件 7.1, 7.3**
 
 ## エラーハンドリング
 
@@ -306,82 +311,66 @@ except Exception as e:
 - オリジンエラー率の追跡
 - 自動フェイルオーバー（S3の高可用性）
 
-## テスト戦略
+## テスト戦略（学習重点）
 
-### デュアルテストアプローチ
+### 学習重点のテストアプローチ
 
-このCDKインフラストラクチャプロジェクトでは、**ユニットテスト**と**プロパティベーステスト**の両方を使用して包括的なカバレッジを実現します。
+このCDKインフラストラクチャプロジェクトでは、個人学習に最適化された**実践的なテスト戦略**を採用します。
 
-#### ユニットテスト
-- **目的**: 特定の設定例、エッジケース、エラー条件の検証
+#### Fine-grained Assertionsテスト（主要学習項目）
+- **目的**: CDKリソースの特定プロパティを詳細に検証
+- **学習価値**: インフラストラクチャテストの基本概念習得
 - **対象**: 
-  - 個別リソースの設定検証
-  - IAM権限の具体的なテスト
-  - 環境変数の設定確認
-  - エラー条件のテスト
+  - S3バケットのセキュリティ設定
+  - Lambda関数の設定値
+  - DynamoDBテーブルのスキーマ
+  - IAM権限の最小権限確認
 
-#### プロパティベーステスト
-- **目的**: すべての入力に対する普遍的プロパティの検証
-- **対象**:
-  - リソース設定の一貫性
-  - セキュリティ設定の正確性
-  - 命名規則の遵守
-  - 統合動作の検証
+#### 基本的なセキュリティ検証
+- **目的**: cdk-nagによる自動セキュリティチェック
+- **学習価値**: AWSセキュリティベストプラクティスの理解
+- **対象**: IAMポリシー、暗号化設定、パブリックアクセス制御
 
-### プロパティベーステスト設定
+#### LocalStackテスト
+- **目的**: コスト効率的な開発・テスト環境
+- **学習価値**: ローカル開発環境の構築スキル
+- **対象**: 基本的なリソース作成とデプロイテスト
 
-**テストライブラリ**: pytest + hypothesis（Python用プロパティベーステストライブラリ）
+### テスト実装例
 
-**設定要件**:
-- 各プロパティテストは最低100回の反復実行
-- 各テストは設計書のプロパティを参照
-- タグ形式: **Feature: cdk-infrastructure, Property {番号}: {プロパティテキスト}**
-
-**テスト例**:
+**Fine-grained Assertionsテスト例**:
 ```python
-@given(environment=text(min_size=1, max_size=10))
-def test_s3_bucket_configuration_property(environment):
+def test_s3_bucket_security_configuration():
     """
-    Feature: cdk-infrastructure, Property 1: S3バケット設定の正確性
+    学習重点: S3バケットセキュリティ設定の検証
     """
-    # CDKスタックを作成
-    stack = DailyCheckinStack(app, f"test-stack-{environment}")
-    
-    # プロパティ検証: S3バケット設定
     template = Template.from_stack(stack)
+    
+    # パブリックアクセスブロック設定の確認
     template.has_resource_properties("AWS::S3::Bucket", {
-        "WebsiteConfiguration": Match.object_like({
-            "IndexDocument": "index.html"
-        }),
-        "VersioningConfiguration": {
-            "Status": "Enabled"
+        "PublicAccessBlockConfiguration": {
+            "BlockPublicAcls": True,
+            "BlockPublicPolicy": True,
+            "IgnorePublicAcls": True,
+            "RestrictPublicBuckets": True
+        }
+    })
+    
+    # 暗号化設定の確認
+    template.has_resource_properties("AWS::S3::Bucket", {
+        "BucketEncryption": {
+            "ServerSideEncryptionConfiguration": Match.any_value()
         }
     })
 ```
 
-### 統合テスト
-
-**エンドツーエンドテスト**:
-1. CDKデプロイメント実行
-2. CloudFront URL経由でのアクセステスト
-3. フォーム送信テスト
-4. DynamoDBデータ確認
-5. リソースクリーンアップ
-
-**テスト環境**:
-- 開発環境での自動テスト実行
-- CI/CDパイプラインでの統合テスト
-- 本番環境への影響なしでのテスト
-
-### テストデータ管理
+### テストデータ管理（簡素化）
 
 **テストデータ戦略**:
-- プロパティテストでのランダムデータ生成
-- ユニットテストでの固定テストケース
-- 実際のフォームデータ形式に基づくテストデータ
-- 日本語文字列を含むテストデータ
+- 固定テストケースによる基本機能確認
+- 日本語文字列を含む実際のフォームデータ形式
+- テスト後の自動リソースクリーンアップ
 
 **データクリーンアップ**:
-- テスト後の自動リソース削除
-- DynamoDBテストデータの自動クリーンアップ
-- S3バケットの自動削除（バージョン管理対応）
+- LocalStack環境でのテスト実行（コスト無し）
+- テスト完了後の自動リソース削除
